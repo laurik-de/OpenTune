@@ -107,6 +107,8 @@ import com.arturo254.opentune.ui.component.IconButton
 import com.arturo254.opentune.ui.component.LocalMenuState
 import com.arturo254.opentune.ui.component.NavigationTitle
 import com.arturo254.opentune.ui.component.SongListItem
+import com.arturo254.opentune.ui.component.SwipeableSongItem
+import com.arturo254.opentune.extensions.toMediaItem
 import com.arturo254.opentune.ui.component.YouTubeGridItem
 import com.arturo254.opentune.ui.component.shimmer.ListItemPlaceHolder
 import com.arturo254.opentune.ui.component.shimmer.ShimmerHost
@@ -660,64 +662,71 @@ fun AlbumScreen(
                         items = wrappedSongs,
                         key = { song -> song.item.id },
                     ) { songWrapper ->
-                        SongListItem(
-                            song = songWrapper.item,
-                            albumIndex = wrappedSongs.indexOf(songWrapper) + 1,
-                            isActive = songWrapper.item.id == mediaMetadata?.id,
-                            isPlaying = isPlaying,
-                            showInLibraryIcon = true,
-                            trailingContent = {
-                                IconButton(
-                                    onClick = {
-                                        menuState.show {
-                                            SongMenu(
-                                                originalSong = songWrapper.item,
-                                                navController = navController,
-                                                onDismiss = menuState::dismiss,
-                                            )
-                                        }
-                                    },
-                                ) {
-                                    Icon(
-                                        painter = painterResource(R.drawable.more_vert),
-                                        contentDescription = null,
-                                    )
-                                }
+                        SwipeableSongItem(
+                            onSwipeToQueue = {
+                                playerConnection.addToQueue(songWrapper.item.toMediaItem())
                             },
-                            isSelected = songWrapper.isSelected && selection,
-                            modifier =
-                                Modifier
-                                    .fillMaxWidth()
-                                    .combinedClickable(
+                            songTitle = songWrapper.item.title
+                        ) {
+                            SongListItem(
+                                song = songWrapper.item,
+                                albumIndex = wrappedSongs.indexOf(songWrapper) + 1,
+                                isActive = songWrapper.item.id == mediaMetadata?.id,
+                                isPlaying = isPlaying,
+                                showInLibraryIcon = true,
+                                trailingContent = {
+                                    IconButton(
                                         onClick = {
-                                            if (!selection) {
-                                                if (songWrapper.item.id == mediaMetadata?.id) {
-                                                    playerConnection.player.togglePlayPause()
+                                            menuState.show {
+                                                SongMenu(
+                                                    originalSong = songWrapper.item,
+                                                    navController = navController,
+                                                    onDismiss = menuState::dismiss,
+                                                )
+                                            }
+                                        },
+                                    ) {
+                                        Icon(
+                                            painter = painterResource(R.drawable.more_vert),
+                                            contentDescription = null,
+                                        )
+                                    }
+                                },
+                                isSelected = songWrapper.isSelected && selection,
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .combinedClickable(
+                                            onClick = {
+                                                if (!selection) {
+                                                    if (songWrapper.item.id == mediaMetadata?.id) {
+                                                        playerConnection.player.togglePlayPause()
+                                                    } else {
+                                                        playerConnection.service.getAutomix(playlistId)
+                                                        playerConnection.playQueue(
+                                                            LocalAlbumRadio(
+                                                                albumWithSongs,
+                                                                startIndex = wrappedSongs.indexOf(songWrapper)
+                                                            ),
+                                                        )
+                                                    }
                                                 } else {
-                                                    playerConnection.service.getAutomix(playlistId)
-                                                    playerConnection.playQueue(
-                                                        LocalAlbumRadio(
-                                                            albumWithSongs,
-                                                            startIndex = wrappedSongs.indexOf(songWrapper)
-                                                        ),
-                                                    )
+                                                    songWrapper.isSelected = !songWrapper.isSelected
                                                 }
-                                            } else {
-                                                songWrapper.isSelected = !songWrapper.isSelected
-                                            }
-                                        },
-                                        onLongClick = {
-                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            if (!selection) {
-                                                selection = true
-                                            }
-                                            wrappedSongs.forEach {
-                                                it.isSelected = false
-                                            } // Clear previous selections
-                                            songWrapper.isSelected = true // Select the current item
-                                        },
-                                    ),
-                        )
+                                            },
+                                            onLongClick = {
+                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                if (!selection) {
+                                                    selection = true
+                                                }
+                                                wrappedSongs.forEach {
+                                                    it.isSelected = false
+                                                } // Clear previous selections
+                                                songWrapper.isSelected = true // Select the current item
+                                            },
+                                        ),
+                            )
+                        }
                     }
                 }
 

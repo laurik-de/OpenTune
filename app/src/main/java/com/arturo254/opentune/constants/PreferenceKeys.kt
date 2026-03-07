@@ -66,6 +66,7 @@ val PlayerTextAlignmentKey = stringPreferencesKey("playerTextAlignment")
 
 val SwipeToSongKey = booleanPreferencesKey("SwipeToSong")
 val SwipeToRemoveSongKey = booleanPreferencesKey("SwipeToRemoveSong")
+val SwipeToQueueKey = booleanPreferencesKey("swipeToQueue")
 
 
 val RotateBackgroundKey = booleanPreferencesKey("rotate_background")

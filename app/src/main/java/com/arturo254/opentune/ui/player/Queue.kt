@@ -4,10 +4,12 @@ import android.annotation.SuppressLint
 import android.text.format.Formatter
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
@@ -82,8 +84,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -466,26 +471,44 @@ fun Queue(
                                 key = item.key,
                             ) {
                                 val currentItem by rememberUpdatedState(window)
+                                var isTouching by remember { mutableStateOf(false) }
+                                var dragX by remember { mutableStateOf(0f) }
+                                var width by remember { mutableStateOf(0) }
+
                                 val dismissBoxState =
                                     rememberSwipeToDismissBoxState(
-                                        positionalThreshold = { totalDistance ->
-                                            totalDistance
-                                        },
                                         confirmValueChange = { dismissValue ->
-                                            if (dismissValue == SwipeToDismissBoxValue.StartToEnd ||
-                                                dismissValue == SwipeToDismissBoxValue.EndToStart
-                                            ) {
-                                                playerConnection.player.removeMediaItem(currentItem.firstPeriodIndex)
+                                            false // Always snap back, the action is handled on release
+                                        },
+                                    )
+
+                                LaunchedEffect(isTouching) {
+                                    if (!isTouching) {
+                                        val isPastThreshold = Math.abs(dragX) > width / 2 && width > 0
+                                        if (isPastThreshold) {
+                                            val player = playerConnection.player
+                                            val timeline = player.currentTimeline
+                                            var indexToRemove = -1
+                                            val windowToRemove = Timeline.Window()
+                                            for (i in 0 until timeline.windowCount) {
+                                                if (timeline.getWindow(i, windowToRemove).uid == currentItem.uid) {
+                                                    indexToRemove = i
+                                                    break
+                                                }
+                                            }
+
+                                            if (indexToRemove != -1) {
+                                                player.removeMediaItem(indexToRemove)
                                                 dismissJob?.cancel()
                                                 dismissJob =
                                                     coroutineScope.launch {
                                                         val snackbarResult =
                                                             snackbarHostState.showSnackbar(
                                                                 message =
-                                                                    context.getString(
-                                                                        R.string.removed_song_from_playlist,
-                                                                        currentItem.mediaItem.metadata?.title,
-                                                                    ),
+                                                                context.getString(
+                                                                    R.string.removed_song_from_playlist,
+                                                                    currentItem.mediaItem.metadata?.title,
+                                                                ),
                                                                 actionLabel = context.getString(R.string.undo),
                                                                 duration = SnackbarDuration.Short,
                                                             )
@@ -493,14 +516,15 @@ fun Queue(
                                                             playerConnection.player.addMediaItem(currentItem.mediaItem)
                                                             playerConnection.player.moveMediaItem(
                                                                 mutableQueueWindows.size,
-                                                                currentItem.firstPeriodIndex,
+                                                                indexToRemove,
                                                             )
                                                         }
                                                     }
                                             }
-                                            true
-                                        },
-                                    )
+                                        }
+                                        dragX = 0f
+                                    }
+                                }
 
                                 val content: @Composable () -> Unit = {
                                     Row(
@@ -516,7 +540,7 @@ fun Queue(
                                                     IconButton(
                                                         onClick = { },
                                                         modifier =
-                                                            Modifier.draggableHandle(),
+                                                        Modifier.draggableHandle(),
                                                     ) {
                                                         Icon(
                                                             painter = painterResource(R.drawable.drag_handle),
@@ -547,39 +571,39 @@ fun Queue(
                                                 }
                                             },
                                             modifier =
-                                                Modifier
-                                                    .fillMaxWidth()
-                                                    .combinedClickable(
-                                                        onClick = {
-                                                            if (selection) {
-                                                                if (window.mediaItem.metadata!! in selectedSongs) {
-                                                                    selectedSongs.remove(window.mediaItem.metadata!!)
-                                                                    selectedItems.remove(currentItem)
-                                                                } else {
-                                                                    selectedSongs.add(window.mediaItem.metadata!!)
-                                                                    selectedItems.add(currentItem)
-                                                                }
+                                            Modifier
+                                                .fillMaxWidth()
+                                                .combinedClickable(
+                                                    onClick = {
+                                                        if (selection) {
+                                                            if (window.mediaItem.metadata!! in selectedSongs) {
+                                                                selectedSongs.remove(window.mediaItem.metadata!!)
+                                                                selectedItems.remove(currentItem)
                                                             } else {
-                                                                if (index == currentWindowIndex) {
-                                                                    playerConnection.player.togglePlayPause()
-                                                                } else {
-                                                                    playerConnection.player.seekToDefaultPosition(
-                                                                        window.firstPeriodIndex,
-                                                                    )
-                                                                    playerConnection.player.playWhenReady =
-                                                                        true
-                                                                }
+                                                                selectedSongs.add(window.mediaItem.metadata!!)
+                                                                selectedItems.add(currentItem)
                                                             }
-                                                        },
-                                                        onLongClick = {
-                                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                            if (!selection) {
-                                                                selection = true
+                                                        } else {
+                                                            if (index == currentWindowIndex) {
+                                                                playerConnection.player.togglePlayPause()
+                                                            } else {
+                                                                playerConnection.player.seekToDefaultPosition(
+                                                                    window.firstPeriodIndex,
+                                                                )
+                                                                playerConnection.player.playWhenReady =
+                                                                    true
                                                             }
-                                                            selectedSongs.clear() // Clear all selections
-                                                            selectedSongs.add(window.mediaItem.metadata!!) // Select current item
-                                                        },
-                                                    ),
+                                                        }
+                                                    },
+                                                    onLongClick = {
+                                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                        if (!selection) {
+                                                            selection = true
+                                                        }
+                                                        selectedSongs.clear() // Clear all selections
+                                                        selectedSongs.add(window.mediaItem.metadata!!) // Select current item
+                                                    },
+                                                ),
                                         )
                                     }
                                 }
@@ -589,7 +613,56 @@ fun Queue(
                                 } else {
                                     SwipeToDismissBox(
                                         state = dismissBoxState,
-                                        backgroundContent = {},
+                                        backgroundContent = {
+                                            val isPastThreshold = Math.abs(dragX) > width / 2 && width > 0
+                                            val isVisible = isPastThreshold || Math.abs(dragX) > 10f
+                                            
+                                            val color by animateColorAsState(
+                                                if (isPastThreshold) MaterialTheme.colorScheme.errorContainer else Color.Transparent,
+                                                label = "backgroundColor"
+                                            )
+                                            val alignment = if (dragX > 0) Alignment.CenterStart else Alignment.CenterEnd
+                                            
+                                            val scale by animateFloatAsState(
+                                                if (isPastThreshold) 1f else 0.75f,
+                                                label = "iconScale"
+                                            )
+
+                                            Box(
+                                                Modifier
+                                                    .fillMaxSize()
+                                                    .background(color)
+                                                    .padding(horizontal = 20.dp),
+                                                contentAlignment = alignment
+                                            ) {
+                                                if (isVisible) {
+                                                    Icon(
+                                                        painter = painterResource(R.drawable.delete),
+                                                        contentDescription = null,
+                                                        modifier = Modifier.scale(scale),
+                                                        tint = if (isPastThreshold) 
+                                                            MaterialTheme.colorScheme.onErrorContainer 
+                                                        else 
+                                                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                                                    )
+                                                }
+                                            }
+                                        },
+                                        modifier = Modifier
+                                            .onSizeChanged { width = it.width }
+                                            .pointerInput(Unit) {
+                                                awaitPointerEventScope {
+                                                    while (true) {
+                                                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                                                        isTouching = event.changes.any { it.pressed }
+                                                        if (isTouching) {
+                                                            event.changes.forEach { change ->
+                                                                dragX += change.position.x - change.previousPosition.x
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
                                     ) {
                                         content()
                                     }

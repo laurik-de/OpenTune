@@ -70,6 +70,7 @@ import com.arturo254.opentune.ui.component.EmptyPlaceholder
 import com.arturo254.opentune.ui.component.IconButton
 import com.arturo254.opentune.ui.component.LocalMenuState
 import com.arturo254.opentune.ui.component.SongListItem
+import com.arturo254.opentune.ui.component.SwipeableSongItem
 import com.arturo254.opentune.ui.menu.SelectionSongMenu
 import com.arturo254.opentune.ui.menu.SongMenu
 import com.arturo254.opentune.ui.utils.ItemWrapper
@@ -245,59 +246,66 @@ fun CachePlaylistScreen(
                 itemsIndexed(
                     filteredSongs,
                     key = { _, song -> song.item.id }) { index, songWrapper ->
-                    SongListItem(
-                        song = songWrapper.item,
-                        isActive = songWrapper.item.id == mediaMetadata?.id,
-                        isPlaying = isPlaying,
-                        isSelected = songWrapper.isSelected && selection,
-                        showInLibraryIcon = true,
-                        trailingContent = {
-                            IconButton(onClick = {
-                                menuState.show {
-                                    SongMenu(
-                                        originalSong = songWrapper.item,
-                                        navController = navController,
-                                        onDismiss = menuState::dismiss,
+                    SwipeableSongItem(
+                        onSwipeToQueue = {
+                            playerConnection.addToQueue(songWrapper.item.toMediaItem())
+                        },
+                        songTitle = songWrapper.item.title
+                    ) {
+                        SongListItem(
+                            song = songWrapper.item,
+                            isActive = songWrapper.item.id == mediaMetadata?.id,
+                            isPlaying = isPlaying,
+                            isSelected = songWrapper.isSelected && selection,
+                            showInLibraryIcon = true,
+                            trailingContent = {
+                                IconButton(onClick = {
+                                    menuState.show {
+                                        SongMenu(
+                                            originalSong = songWrapper.item,
+                                            navController = navController,
+                                            onDismiss = menuState::dismiss,
+                                        )
+                                    }
+                                }) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.more_vert),
+                                        contentDescription = null
                                     )
                                 }
-                            }) {
-                                Icon(
-                                    painter = painterResource(R.drawable.more_vert),
-                                    contentDescription = null
-                                )
-                            }
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .combinedClickable(
-                                onClick = {
-                                    if (!selection) {
-                                        if (songWrapper.item.id == mediaMetadata?.id) {
-                                            playerConnection.player.togglePlayPause()
-                                        } else {
-                                            playerConnection.playQueue(
-                                                ListQueue(
-                                                    title = "Cache Songs",
-                                                    items = filteredSongs.map { it.item.toMediaItem() },
-                                                    startIndex = index
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .combinedClickable(
+                                    onClick = {
+                                        if (!selection) {
+                                            if (songWrapper.item.id == mediaMetadata?.id) {
+                                                playerConnection.player.togglePlayPause()
+                                            } else {
+                                                playerConnection.playQueue(
+                                                    ListQueue(
+                                                        title = "Cache Songs",
+                                                        items = filteredSongs.map { it.item.toMediaItem() },
+                                                        startIndex = index
+                                                    )
                                                 )
-                                            )
+                                            }
+                                        } else {
+                                            songWrapper.isSelected = !songWrapper.isSelected
                                         }
-                                    } else {
-                                        songWrapper.isSelected = !songWrapper.isSelected
+                                    },
+                                    onLongClick = {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        if (!selection) {
+                                            selection = true
+                                            wrappedSongs.forEach { it.isSelected = false }
+                                            songWrapper.isSelected = true
+                                        }
                                     }
-                                },
-                                onLongClick = {
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    if (!selection) {
-                                        selection = true
-                                        wrappedSongs.forEach { it.isSelected = false }
-                                        songWrapper.isSelected = true
-                                    }
-                                }
-                            )
-                            .animateItem()
-                    )
+                                )
+                                .animateItem()
+                        )
+                    }
                 }
             }
         }

@@ -842,6 +842,11 @@ fun SettingsScreen(
                     onClick = { navController.navigate("settings/backup_restore") }
                 ),
                 SettingsCategoryItem(
+                    icon = painterResource(R.drawable.schedule),
+                    title = { Text(stringResource(R.string.behaviour)) },
+                    onClick = { navController.navigate("settings/behaviour") }
+                ),
+                SettingsCategoryItem(
                     icon = painterResource(R.drawable.info),
                     title = { Text(stringResource(R.string.about)) },
                     onClick = { navController.navigate("settings/about") }

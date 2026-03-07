@@ -59,6 +59,8 @@ import com.arturo254.opentune.ui.component.EmptyPlaceholder
 import com.arturo254.opentune.ui.component.LocalMenuState
 import com.arturo254.opentune.ui.component.NavigationTitle
 import com.arturo254.opentune.ui.component.YouTubeListItem
+import com.arturo254.opentune.ui.component.SwipeableSongItem
+import com.arturo254.opentune.extensions.toMediaItem
 import com.arturo254.opentune.ui.component.shimmer.ListItemPlaceHolder
 import com.arturo254.opentune.ui.component.shimmer.ShimmerHost
 import com.arturo254.opentune.ui.menu.YouTubeAlbumMenu
@@ -136,26 +138,27 @@ fun OnlineSearchResult(
                 }
             }
         }
-        YouTubeListItem(
-            item = item,
-            isActive =
+        val listItemContent: @Composable () -> Unit = {
+            YouTubeListItem(
+                item = item,
+                isActive =
                 when (item) {
                     is SongItem -> mediaMetadata?.id == item.id
                     is AlbumItem -> mediaMetadata?.album?.id == item.id
                     else -> false
                 },
-            isPlaying = isPlaying,
-            trailingContent = {
-                IconButton(
-                    onClick = longClick,
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.more_vert),
-                        contentDescription = null,
-                    )
-                }
-            },
-            modifier =
+                isPlaying = isPlaying,
+                trailingContent = {
+                    IconButton(
+                        onClick = longClick,
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.more_vert),
+                            contentDescription = null,
+                        )
+                    }
+                },
+                modifier =
                 Modifier
                     .combinedClickable(
                         onClick = {
@@ -181,7 +184,21 @@ fun OnlineSearchResult(
                         onLongClick = longClick,
                     )
                     .animateItem(),
-        )
+            )
+        }
+
+        if (item is SongItem) {
+            SwipeableSongItem(
+                onSwipeToQueue = {
+                    playerConnection.addToQueue(item.toMediaItem())
+                },
+                songTitle = item.title
+            ) {
+                listItemContent()
+            }
+        } else {
+            listItemContent()
+        }
     }
 
     LazyColumn(

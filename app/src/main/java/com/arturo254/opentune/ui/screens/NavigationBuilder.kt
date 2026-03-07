@@ -32,6 +32,7 @@ import com.arturo254.opentune.ui.screens.settings.AboutScreen
 import com.arturo254.opentune.ui.screens.settings.AccountSettings
 import com.arturo254.opentune.ui.screens.settings.AppearanceSettings
 import com.arturo254.opentune.ui.screens.settings.BackupAndRestore
+import com.arturo254.opentune.ui.screens.settings.BehaviourSettings
 import com.arturo254.opentune.ui.screens.settings.ContentSettings
 import com.arturo254.opentune.ui.screens.settings.DiscordLoginScreen
 import com.arturo254.opentune.ui.screens.settings.DiscordSettings
@@ -274,6 +275,9 @@ fun NavGraphBuilder.navigationBuilder(
     }
     composable("settings/discord/login") {
         DiscordLoginScreen(navController)
+    }
+    composable("settings/behaviour") {
+        BehaviourSettings(navController, scrollBehavior)
     }
     composable("settings/about") {
         AboutScreen(navController, scrollBehavior)

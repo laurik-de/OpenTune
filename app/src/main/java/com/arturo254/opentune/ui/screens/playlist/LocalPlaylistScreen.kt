@@ -133,6 +133,7 @@ import com.arturo254.opentune.ui.component.DraggableScrollbar
 import com.arturo254.opentune.ui.component.EmptyPlaceholder
 import com.arturo254.opentune.ui.component.LocalMenuState
 import com.arturo254.opentune.ui.component.SongListItem
+import com.arturo254.opentune.ui.component.SwipeableSongItem
 import com.arturo254.opentune.ui.component.SortHeader
 import com.arturo254.opentune.ui.component.TextFieldDialog
 import com.arturo254.opentune.ui.menu.PlaylistMenu
@@ -617,70 +618,77 @@ fun LocalPlaylistScreen(
                                                         else MaterialTheme.colorScheme.surfaceContainer
                                                     )
                                             ) {
-                                                SongListItem(
-                                                    song = song.song,
-                                                    isActive = isActive,
-                                                    isPlaying = isPlaying,
-                                                    showInLibraryIcon = true,
-                                                    trailingContent = {
-                                                        IconButton(
-                                                            onClick = {
-                                                                menuState.show {
-                                                                    SongMenu(
-                                                                        originalSong = song.song,
-                                                                        playlistSong = song,
-                                                                        playlistBrowseId = playlist.playlist.browseId,
-                                                                        navController = navController,
-                                                                        onDismiss = menuState::dismiss,
-                                                                    )
-                                                                }
-                                                            },
-                                                        ) {
-                                                            Icon(
-                                                                painter = painterResource(R.drawable.more_vert),
-                                                                contentDescription = null,
-                                                            )
-                                                        }
-
-                                                        if (sortType == PlaylistSongSortType.CUSTOM && !locked && !selection && !isSearching) {
-                                                            IconButton(
-                                                                onClick = { },
-                                                                modifier = Modifier.draggableHandle(),
-                                                            ) {
-                                                                Icon(
-                                                                    painter = painterResource(R.drawable.drag_handle),
-                                                                    contentDescription = null,
-                                                                )
-                                                            }
-                                                        }
+                                                SwipeableSongItem(
+                                                    onSwipeToQueue = {
+                                                        playerConnection.addToQueue(song.song.toMediaItem())
                                                     },
-                                                    modifier =
-                                                        Modifier
-                                                            .fillMaxWidth()
-                                                            .combinedClickable(
+                                                    songTitle = song.song.title
+                                                ) {
+                                                    SongListItem(
+                                                        song = song.song,
+                                                        isActive = isActive,
+                                                        isPlaying = isPlaying,
+                                                        showInLibraryIcon = true,
+                                                        trailingContent = {
+                                                            IconButton(
                                                                 onClick = {
-                                                                    if (song.song.id == mediaMetadata?.id) {
-                                                                        playerConnection.player.togglePlayPause()
-                                                                    } else {
-                                                                        playerConnection.playQueue(
-                                                                            ListQueue(
-                                                                                title = playlist.playlist.name,
-                                                                                items = songs.map { it.song.toMediaItem() },
-                                                                                startIndex = songs.indexOfFirst { it.map.id == song.map.id },
-                                                                            ),
+                                                                    menuState.show {
+                                                                        SongMenu(
+                                                                            originalSong = song.song,
+                                                                            playlistSong = song,
+                                                                            playlistBrowseId = playlist.playlist.browseId,
+                                                                            navController = navController,
+                                                                            onDismiss = menuState::dismiss,
                                                                         )
                                                                     }
                                                                 },
-                                                                onLongClick = {
-                                                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                                    if (!selection) {
-                                                                        selection = true
-                                                                    }
-                                                                    wrappedSongs.forEach { it.isSelected = false }
-                                                                    wrappedSongs.find { it.item.map.id == song.map.id }?.isSelected = true
-                                                                },
-                                                            )
-                                                )
+                                                            ) {
+                                                                Icon(
+                                                                    painter = painterResource(R.drawable.more_vert),
+                                                                    contentDescription = null,
+                                                                )
+                                                            }
+
+                                                            if (sortType == PlaylistSongSortType.CUSTOM && !locked && !selection && !isSearching) {
+                                                                IconButton(
+                                                                    onClick = { },
+                                                                    modifier = Modifier.draggableHandle(),
+                                                                ) {
+                                                                    Icon(
+                                                                        painter = painterResource(R.drawable.drag_handle),
+                                                                        contentDescription = null,
+                                                                    )
+                                                                }
+                                                            }
+                                                        },
+                                                        modifier =
+                                                            Modifier
+                                                                .fillMaxWidth()
+                                                                .combinedClickable(
+                                                                    onClick = {
+                                                                        if (song.song.id == mediaMetadata?.id) {
+                                                                            playerConnection.player.togglePlayPause()
+                                                                        } else {
+                                                                            playerConnection.playQueue(
+                                                                                ListQueue(
+                                                                                    title = playlist.playlist.name,
+                                                                                    items = songs.map { it.song.toMediaItem() },
+                                                                                    startIndex = songs.indexOfFirst { it.map.id == song.map.id },
+                                                                                ),
+                                                                            )
+                                                                        }
+                                                                    },
+                                                                    onLongClick = {
+                                                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                                        if (!selection) {
+                                                                            selection = true
+                                                                        }
+                                                                        wrappedSongs.forEach { it.isSelected = false }
+                                                                        wrappedSongs.find { it.item.map.id == song.map.id }?.isSelected = true
+                                                                    },
+                                                                )
+                                                    )
+                                                }
                                             }
                                         }
 
@@ -769,73 +777,79 @@ fun LocalPlaylistScreen(
                                                         else MaterialTheme.colorScheme.surfaceContainer
                                                     )
                                             ) {
-                                                SongListItem(
-                                                    song = songWrapper.item.song,
-                                                    isActive = isActive,
-                                                    isPlaying = isPlaying,
-                                                    showInLibraryIcon = true,
-                                                    trailingContent = {
-                                                        IconButton(
-                                                            onClick = {
-                                                                menuState.show {
-                                                                    SongMenu(
-                                                                        originalSong = songWrapper.item.song,
-                                                                        playlistBrowseId = playlist?.playlist?.browseId,
-                                                                        navController = navController,
-                                                                        onDismiss = menuState::dismiss,
-                                                                    )
-                                                                }
-                                                            },
-                                                        ) {
-                                                            Icon(
-                                                                painter = painterResource(R.drawable.more_vert),
-                                                                contentDescription = null,
-                                                            )
-                                                        }
-                                                        if (sortType == PlaylistSongSortType.CUSTOM && !locked && !selection && !isSearching) {
+                                                SwipeableSongItem(
+                                                    onSwipeToQueue = {
+                                                        playerConnection.addToQueue(songWrapper.item.song.toMediaItem())
+                                                    },
+                                                ) {
+                                                    SongListItem(
+                                                        song = songWrapper.item.song,
+                                                        isActive = isActive,
+                                                        isPlaying = isPlaying,
+                                                        showInLibraryIcon = true,
+                                                        trailingContent = {
                                                             IconButton(
-                                                                onClick = { },
-                                                                modifier = Modifier.draggableHandle(),
+                                                                onClick = {
+                                                                    menuState.show {
+                                                                        SongMenu(
+                                                                            originalSong = songWrapper.item.song,
+                                                                            playlistBrowseId = playlist?.playlist?.browseId,
+                                                                            navController = navController,
+                                                                            onDismiss = menuState::dismiss,
+                                                                        )
+                                                                    }
+                                                                },
                                                             ) {
                                                                 Icon(
-                                                                    painter = painterResource(R.drawable.drag_handle),
+                                                                    painter = painterResource(R.drawable.more_vert),
                                                                     contentDescription = null,
                                                                 )
                                                             }
-                                                        }
-                                                    },
-                                                    isSelected = songWrapper.isSelected && selection,
-                                                    modifier =
-                                                        Modifier
-                                                            .fillMaxWidth()
-                                                            .combinedClickable(
-                                                                onClick = {
-                                                                    if (!selection) {
-                                                                        if (songWrapper.item.song.id == mediaMetadata?.id) {
-                                                                            playerConnection.player.togglePlayPause()
+                                                            if (sortType == PlaylistSongSortType.CUSTOM && !locked && !selection && !isSearching) {
+                                                                IconButton(
+                                                                    onClick = { },
+                                                                    modifier = Modifier.draggableHandle(),
+                                                                ) {
+                                                                    Icon(
+                                                                        painter = painterResource(R.drawable.drag_handle),
+                                                                        contentDescription = null,
+                                                                    )
+                                                                }
+                                                            }
+                                                        },
+                                                        isSelected = songWrapper.isSelected && selection,
+                                                        modifier =
+                                                            Modifier
+                                                                .fillMaxWidth()
+                                                                .combinedClickable(
+                                                                    onClick = {
+                                                                        if (!selection) {
+                                                                            if (songWrapper.item.song.id == mediaMetadata?.id) {
+                                                                                playerConnection.player.togglePlayPause()
+                                                                            } else {
+                                                                                playerConnection.playQueue(
+                                                                                    ListQueue(
+                                                                                        title = playlist!!.playlist.name,
+                                                                                        items = songs.map { it.song.toMediaItem() },
+                                                                                        startIndex = index,
+                                                                                    ),
+                                                                                )
+                                                                            }
                                                                         } else {
-                                                                            playerConnection.playQueue(
-                                                                                ListQueue(
-                                                                                    title = playlist!!.playlist.name,
-                                                                                    items = songs.map { it.song.toMediaItem() },
-                                                                                    startIndex = index,
-                                                                                ),
-                                                                            )
+                                                                            songWrapper.isSelected = !songWrapper.isSelected
                                                                         }
-                                                                    } else {
-                                                                        songWrapper.isSelected = !songWrapper.isSelected
-                                                                    }
-                                                                },
-                                                                onLongClick = {
-                                                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                                    if (!selection) {
-                                                                        selection = true
-                                                                    }
-                                                                    wrappedSongs.forEach { it.isSelected = false }
-                                                                    songWrapper.isSelected = true
-                                                                },
-                                                            ),
-                                                )
+                                                                    },
+                                                                    onLongClick = {
+                                                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                                        if (!selection) {
+                                                                            selection = true
+                                                                        }
+                                                                        wrappedSongs.forEach { it.isSelected = false }
+                                                                        songWrapper.isSelected = true
+                                                                    },
+                                                                ),
+                                                    )
+                                                }
                                             }
                                         }
 

@@ -47,6 +47,8 @@ import com.arturo254.opentune.ui.component.IconButton
 import com.arturo254.opentune.ui.component.LocalMenuState
 import com.arturo254.opentune.ui.component.YouTubeGridItem
 import com.arturo254.opentune.ui.component.YouTubeListItem
+import com.arturo254.opentune.ui.component.SwipeableSongItem
+import com.arturo254.opentune.extensions.toMediaItem
 import com.arturo254.opentune.ui.component.shimmer.GridItemPlaceHolder
 import com.arturo254.opentune.ui.component.shimmer.ListItemPlaceHolder
 import com.arturo254.opentune.ui.component.shimmer.ShimmerHost
@@ -114,61 +116,38 @@ fun ArtistItemsScreen(
                 items = itemsPage?.items.orEmpty(),
                 key = { it.id },
             ) { item ->
-                YouTubeListItem(
-                    item = item,
-                    isActive =
-                        when (item) {
-                            is SongItem -> mediaMetadata?.id == item.id
-                            is AlbumItem -> mediaMetadata?.album?.id == item.id
-                            else -> false
+                if (item is SongItem) {
+                    SwipeableSongItem(
+                        onSwipeToQueue = {
+                            playerConnection.addToQueue(item.toMediaItem())
                         },
-                    isPlaying = isPlaying,
-                    trailingContent = {
-                        IconButton(
-                            onClick = {
-                                menuState.show {
-                                    when (item) {
-                                        is SongItem ->
+                        songTitle = item.title
+                    ) {
+                        YouTubeListItem(
+                            item = item,
+                            isActive = mediaMetadata?.id == item.id,
+                            isPlaying = isPlaying,
+                            trailingContent = {
+                                IconButton(
+                                    onClick = {
+                                        menuState.show {
                                             YouTubeSongMenu(
                                                 song = item,
                                                 navController = navController,
                                                 onDismiss = menuState::dismiss,
                                             )
-
-                                        is AlbumItem ->
-                                            YouTubeAlbumMenu(
-                                                albumItem = item,
-                                                navController = navController,
-                                                onDismiss = menuState::dismiss,
-                                            )
-
-                                        is ArtistItem ->
-                                            YouTubeArtistMenu(
-                                                artist = item,
-                                                onDismiss = menuState::dismiss,
-                                            )
-
-                                        is PlaylistItem ->
-                                            YouTubePlaylistMenu(
-                                                playlist = item,
-                                                coroutineScope = coroutineScope,
-                                                onDismiss = menuState::dismiss,
-                                            )
-                                    }
+                                        }
+                                    },
+                                ) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.more_vert),
+                                        contentDescription = null,
+                                    )
                                 }
                             },
-                        ) {
-                            Icon(
-                                painter = painterResource(R.drawable.more_vert),
-                                contentDescription = null,
-                            )
-                        }
-                    },
-                    modifier =
-                        Modifier
-                            .clickable {
-                                when (item) {
-                                    is SongItem -> {
+                            modifier =
+                                Modifier
+                                    .clickable {
                                         if (item.id == mediaMetadata?.id) {
                                             playerConnection.player.togglePlayPause()
                                         } else {
@@ -180,14 +159,65 @@ fun ArtistItemsScreen(
                                                 ),
                                             )
                                         }
-                                    }
-
-                                    is AlbumItem -> navController.navigate("album/${item.id}")
-                                    is ArtistItem -> navController.navigate("artist/${item.id}")
-                                    is PlaylistItem -> navController.navigate("online_playlist/${item.id}")
-                                }
+                                    },
+                        )
+                    }
+                } else {
+                    YouTubeListItem(
+                        item = item,
+                        isActive =
+                            when (item) {
+                                is AlbumItem -> mediaMetadata?.album?.id == item.id
+                                else -> false
                             },
-                )
+                        isPlaying = isPlaying,
+                        trailingContent = {
+                            IconButton(
+                                onClick = {
+                                    menuState.show {
+                                        when (item) {
+                                            is AlbumItem ->
+                                                YouTubeAlbumMenu(
+                                                    albumItem = item,
+                                                    navController = navController,
+                                                    onDismiss = menuState::dismiss,
+                                                )
+
+                                            is ArtistItem ->
+                                                YouTubeArtistMenu(
+                                                    artist = item,
+                                                    onDismiss = menuState::dismiss,
+                                                )
+
+                                            is PlaylistItem ->
+                                                YouTubePlaylistMenu(
+                                                    playlist = item,
+                                                    coroutineScope = coroutineScope,
+                                                    onDismiss = menuState::dismiss,
+                                                )
+                                            else -> {}
+                                        }
+                                    }
+                                },
+                            ) {
+                                Icon(
+                                    painter = painterResource(R.drawable.more_vert),
+                                    contentDescription = null,
+                                )
+                            }
+                        },
+                        modifier =
+                            Modifier
+                                .clickable {
+                                    when (item) {
+                                        is AlbumItem -> navController.navigate("album/${item.id}")
+                                        is ArtistItem -> navController.navigate("artist/${item.id}")
+                                        is PlaylistItem -> navController.navigate("online_playlist/${item.id}")
+                                        else -> {}
+                                    }
+                                },
+                    )
+                }
             }
 
             if (itemsPage?.continuation != null) {

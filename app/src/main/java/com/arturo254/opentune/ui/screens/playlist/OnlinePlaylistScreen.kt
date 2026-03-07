@@ -97,6 +97,7 @@ import com.arturo254.opentune.ui.component.AutoResizeText
 import com.arturo254.opentune.ui.component.FontSizeRange
 import com.arturo254.opentune.ui.component.LocalMenuState
 import com.arturo254.opentune.ui.component.VerticalFastScroller
+import com.arturo254.opentune.ui.component.SwipeableSongItem
 import com.arturo254.opentune.ui.component.YouTubeListItem
 import com.arturo254.opentune.ui.component.shimmer.ButtonPlaceholder
 import com.arturo254.opentune.ui.component.shimmer.ListItemPlaceHolder
@@ -408,69 +409,76 @@ fun OnlinePlaylistScreen(
                         items(
                             items = wrappedSongs,
                         ) { song ->
-                            YouTubeListItem(
-                                item = song.item.second,
-                                isActive = mediaMetadata?.id == song.item.second.id,
-                                isPlaying = isPlaying,
-                                isSelected = song.isSelected && selection,
-                                trailingContent = {
-                                    IconButton(
-                                        onClick = {
-                                            menuState.show {
-                                                YouTubeSongMenu(
-                                                    song = song.item.second,
-                                                    navController = navController,
-                                                    onDismiss = menuState::dismiss,
-                                                )
-                                            }
-                                        },
-                                    ) {
-                                        Icon(
-                                            painter = painterResource(R.drawable.more_vert),
-                                            contentDescription = null,
-                                        )
-                                    }
+                            SwipeableSongItem(
+                                onSwipeToQueue = {
+                                    playerConnection.addToQueue(song.item.second.toMediaItem())
                                 },
-                                modifier =
-                                    Modifier
-                                        .combinedClickable(
-                                            enabled = !hideExplicit || !song.item.second.explicit,
+                                songTitle = song.item.second.title
+                            ) {
+                                YouTubeListItem(
+                                    item = song.item.second,
+                                    isActive = mediaMetadata?.id == song.item.second.id,
+                                    isPlaying = isPlaying,
+                                    isSelected = song.isSelected && selection,
+                                    trailingContent = {
+                                        IconButton(
                                             onClick = {
-                                                if (!selection) {
-                                                    if (song.item.second.id == mediaMetadata?.id) {
-                                                        playerConnection.player.togglePlayPause()
+                                                menuState.show {
+                                                    YouTubeSongMenu(
+                                                        song = song.item.second,
+                                                        navController = navController,
+                                                        onDismiss = menuState::dismiss,
+                                                    )
+                                                }
+                                            },
+                                        ) {
+                                            Icon(
+                                                painter = painterResource(R.drawable.more_vert),
+                                                contentDescription = null,
+                                            )
+                                        }
+                                    },
+                                    modifier =
+                                        Modifier
+                                            .combinedClickable(
+                                                enabled = !hideExplicit || !song.item.second.explicit,
+                                                onClick = {
+                                                    if (!selection) {
+                                                        if (song.item.second.id == mediaMetadata?.id) {
+                                                            playerConnection.player.togglePlayPause()
+                                                        } else {
+                                                            playerConnection.service.getAutomix(
+                                                                playlistId = playlist.id
+                                                            )
+                                                            playerConnection.playQueue(
+                                                                YouTubeQueue(
+                                                                    song.item.second.endpoint
+                                                                        ?: WatchEndpoint(
+                                                                            videoId =
+                                                                                song.item.second
+                                                                                    .id,
+                                                                        ),
+                                                                    song.item.second.toMediaMetadata(),
+                                                                ),
+                                                            )
+                                                        }
                                                     } else {
-                                                        playerConnection.service.getAutomix(
-                                                            playlistId = playlist.id
-                                                        )
-                                                        playerConnection.playQueue(
-                                                            YouTubeQueue(
-                                                                song.item.second.endpoint
-                                                                    ?: WatchEndpoint(
-                                                                        videoId =
-                                                                            song.item.second
-                                                                                .id,
-                                                                    ),
-                                                                song.item.second.toMediaMetadata(),
-                                                            ),
-                                                        )
+                                                        song.isSelected = !song.isSelected
                                                     }
-                                                } else {
-                                                    song.isSelected = !song.isSelected
-                                                }
-                                            },
-                                            onLongClick = {
-                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                if (!selection) {
-                                                    selection = true
-                                                }
-                                                wrappedSongs.forEach { it.isSelected = false }
-                                                song.isSelected = true
-                                            },
-                                        )
-                                        .alpha(if (hideExplicit && song.item.second.explicit) 0.3f else 1f)
-                                        .animateItem(),
-                            )
+                                                },
+                                                onLongClick = {
+                                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                    if (!selection) {
+                                                        selection = true
+                                                    }
+                                                    wrappedSongs.forEach { it.isSelected = false }
+                                                    song.isSelected = true
+                                                },
+                                            )
+                                            .alpha(if (hideExplicit && song.item.second.explicit) 0.3f else 1f)
+                                            .animateItem(),
+                                )
+                            }
                         }
                     } else {
                         item {
