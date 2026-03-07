@@ -8,8 +8,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.snapping.SnapLayoutInfoProvider
-import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.foundation.pager.HorizontalPager
@@ -83,39 +81,28 @@ fun Thumbnail(
         else -> Color.White
     }
 
-    val thumbnailLazyGridState = rememberLazyGridState()
+    val queueWindows by playerConnection.queueWindows.collectAsState()
+    val currentWindowIndex by playerConnection.currentWindowIndex.collectAsState()
 
-    val timeline = playerConnection.player.currentTimeline
-    val currentIndex = playerConnection.player.currentMediaItemIndex
-    val shuffleModeEnabled = playerConnection.player.shuffleModeEnabled
+    val pagerState = rememberPagerState(
+        initialPage = Math.max(0, currentWindowIndex),
+        pageCount = { queueWindows.size }
+    )
 
-    val previousMediaMetadata = if (swipeThumbnail && !timeline.isEmpty) {
-        val index = timeline.getPreviousWindowIndex(currentIndex, Player.REPEAT_MODE_OFF, shuffleModeEnabled)
-        if (index != C.INDEX_UNSET) playerConnection.player.getMediaItemAt(index) else null
-    } else null
-
-    val nextMediaMetadata = if (swipeThumbnail && !timeline.isEmpty) {
-        val index = timeline.getNextWindowIndex(currentIndex, Player.REPEAT_MODE_OFF, shuffleModeEnabled)
-        if (index != C.INDEX_UNSET) playerConnection.player.getMediaItemAt(index) else null
-    } else null
-
-    val currentMediaItem = playerConnection.player.currentMediaItem
-    val mediaItems = listOfNotNull(previousMediaMetadata, currentMediaItem, nextMediaMetadata)
-    val currentMediaIndex = mediaItems.indexOf(currentMediaItem)
-
-    LaunchedEffect(currentMediaIndex) {
-        if (currentMediaIndex != -1) {
-            thumbnailLazyGridState.scrollToItem(currentMediaIndex)
+    LaunchedEffect(currentWindowIndex) {
+        if (currentWindowIndex != -1 && pagerState.currentPage != currentWindowIndex) {
+            pagerState.animateScrollToPage(currentWindowIndex)
         }
     }
 
-    val snapProvider = remember(thumbnailLazyGridState) {
-        SnapLayoutInfoProvider(
-            lazyGridState = thumbnailLazyGridState,
-            positionInLayout = { layoutSize, itemSize ->
-                layoutSize / 2f - itemSize / 2f
+    LaunchedEffect(pagerState.settledPage) {
+        if (pagerState.settledPage != currentWindowIndex && currentWindowIndex != -1) {
+            if (pagerState.settledPage > currentWindowIndex) {
+                playerConnection.seekToNext()
+            } else {
+                playerConnection.skipToPrevious()
             }
-        )
+        }
     }
 
     Box(modifier = modifier) {
@@ -162,55 +149,55 @@ fun Thumbnail(
                 ) {
                     val size = maxWidth - PlayerHorizontalPadding * 2
 
-                    LazyHorizontalGrid(
-                        rows = GridCells.Fixed(1),
-                        state = thumbnailLazyGridState,
-                        flingBehavior = rememberSnapFlingBehavior(snapProvider),
+                    HorizontalPager(
+                        state = pagerState,
                         userScrollEnabled = swipeThumbnail && isPlayerExpanded,
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        items(mediaItems) { item ->
-                            Box(
-                                modifier = Modifier
-                                    .width(maxWidth)
-                                    .fillMaxSize()
-                                    .pointerInput(Unit) {
-                                        detectTapGestures(
-                                            onTap = { onOpenFullscreenLyrics() },
-                                            onDoubleTap = { offset ->
-                                                if (offset.x < size.toPx() / 2) {
-                                                    playerConnection.player.seekBack()
-                                                } else {
-                                                    playerConnection.player.seekForward()
-                                                }
-                                            }
-                                        )
-                                    },
-                                contentAlignment = Alignment.Center
-                            ) {
+                        modifier = Modifier.fillMaxSize(),
+                        beyondViewportPageCount = 1
+                    ) { page ->
+                        val window = queueWindows.getOrNull(page)
+                        val item = window?.mediaItem
 
-                                if (isAppleMusicStyle) {
-                                    // CARÁTULA OCULTA
-                                    Box(modifier = Modifier.size(size))
-                                } else {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(size)
-                                            .clip(RoundedCornerShape(thumbnailCornerRadius.dp * 2))
-                                            .background(MaterialTheme.colorScheme.surfaceVariant)
-                                    ) {
-                                        AsyncImage(
-                                            model = ImageRequest.Builder(LocalContext.current)
-                                                .data(item.mediaMetadata.artworkUri?.toString())
-                                                .memoryCachePolicy(CachePolicy.ENABLED)
-                                                .diskCachePolicy(CachePolicy.ENABLED)
-                                                .networkCachePolicy(CachePolicy.ENABLED)
-                                                .build(),
-                                            contentDescription = null,
-                                            contentScale = ContentScale.Fit,
-                                            modifier = Modifier.fillMaxSize()
-                                        )
-                                    }
+                        Box(
+                            modifier = Modifier
+                                .width(maxWidth)
+                                .fillMaxSize()
+                                .pointerInput(Unit) {
+                                    detectTapGestures(
+                                        onTap = { onOpenFullscreenLyrics() },
+                                        onDoubleTap = { offset ->
+                                            if (offset.x < size.toPx() / 2) {
+                                                playerConnection.player.seekBack()
+                                            } else {
+                                                playerConnection.player.seekForward()
+                                            }
+                                        }
+                                    )
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+
+                            if (isAppleMusicStyle) {
+                                // CARÁTULA OCULTA
+                                Box(modifier = Modifier.size(size))
+                            } else {
+                                Box(
+                                    modifier = Modifier
+                                        .size(size)
+                                        .clip(RoundedCornerShape(thumbnailCornerRadius.dp * 2))
+                                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                                ) {
+                                    AsyncImage(
+                                        model = ImageRequest.Builder(LocalContext.current)
+                                            .data(item?.mediaMetadata?.artworkUri?.toString())
+                                            .memoryCachePolicy(CachePolicy.ENABLED)
+                                            .diskCachePolicy(CachePolicy.ENABLED)
+                                            .networkCachePolicy(CachePolicy.ENABLED)
+                                            .build(),
+                                        contentDescription = null,
+                                        contentScale = ContentScale.Fit,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
                                 }
                             }
                         }
@@ -248,44 +235,3 @@ fun Thumbnail(
         }
     }
 }
-@ExperimentalFoundationApi
-fun SnapLayoutInfoProvider(
-    lazyGridState: LazyGridState,
-    positionInLayout: (layoutSize: Float, itemSize: Float) -> Float,
-): SnapLayoutInfoProvider = object : SnapLayoutInfoProvider {
-
-    private val layoutInfo: LazyGridLayoutInfo
-        get() = lazyGridState.layoutInfo
-
-    override fun calculateApproachOffset(velocity: Float, decayOffset: Float) = 0f
-
-    override fun calculateSnapOffset(velocity: Float): Float {
-        val bounds = calculateBounds()
-        return if (abs(bounds.start) < abs(bounds.endInclusive)) bounds.start else bounds.endInclusive
-    }
-
-    private fun calculateBounds(): ClosedFloatingPointRange<Float> {
-        var lower = Float.NEGATIVE_INFINITY
-        var upper = Float.POSITIVE_INFINITY
-
-        layoutInfo.visibleItemsInfo.fastForEach { item ->
-            val offset = calculateDistanceToDesiredSnapPosition(layoutInfo, item, positionInLayout)
-            if (offset <= 0 && offset > lower) lower = offset
-            if (offset >= 0 && offset < upper) upper = offset
-        }
-        return lower..upper
-    }
-}
-
-fun calculateDistanceToDesiredSnapPosition(
-    layoutInfo: LazyGridLayoutInfo,
-    item: LazyGridItemInfo,
-    positionInLayout: (layoutSize: Float, itemSize: Float) -> Float,
-): Float {
-    val containerSize =
-        layoutInfo.singleAxisViewportSize - layoutInfo.beforeContentPadding - layoutInfo.afterContentPadding
-    return item.offset.x - positionInLayout(containerSize.toFloat(), item.size.width.toFloat())
-}
-
-private val LazyGridLayoutInfo.singleAxisViewportSize: Int
-    get() = if (orientation == Orientation.Vertical) viewportSize.height else viewportSize.width
