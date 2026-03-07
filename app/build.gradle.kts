@@ -13,12 +13,12 @@ plugins {
 android {
     namespace = "com.arturo254.opentune"
     //noinspection GradleDependency
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.Arturo254.opentune"
+        applicationId = "de.laurik.opentune"
         minSdk = 24
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 126
         versionName = "2.0.12"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

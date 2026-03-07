@@ -421,6 +421,20 @@ class PlayerConnection(
         }
     }
 
+    fun skipToPrevious() {
+        try {
+            Log.d(TAG, "Skipping to previous track (forced)")
+            if (player.hasPreviousMediaItem()) {
+                player.seekToPreviousMediaItem()
+                player.prepare()
+                player.playWhenReady = true
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error skipping to previous", e)
+            reportException(e)
+        }
+    }
+
     fun togglePlayPause() {
         try {
             val newPlayWhenReady = !player.playWhenReady
