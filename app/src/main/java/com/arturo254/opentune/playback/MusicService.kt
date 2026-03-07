@@ -761,15 +761,19 @@ class MusicService :
     fun startRadioSeamlessly() {
         val currentMediaMetadata = player.currentMetadata ?: return
 
-        // Guardar canción actual
-        val currentSong = player.currentMediaItem
+        // Remover canciones automáticas de la cola futura
+        var i = player.currentMediaItemIndex + 1
+        while (i < player.mediaItemCount) {
+            if (player.getMediaItemAt(i).metadata?.manual != true) {
+                player.removeMediaItem(i)
+            } else {
+                i++
+            }
+        }
 
-        // Remover otras canciones de la cola
+        // Remover canciones previas
         if (player.currentMediaItemIndex > 0) {
             player.removeMediaItems(0, player.currentMediaItemIndex)
-        }
-        if (player.currentMediaItemIndex < player.mediaItemCount - 1) {
-            player.removeMediaItems(player.currentMediaItemIndex + 1, player.mediaItemCount)
         }
 
         scope.launch(SilentHandler) {
@@ -782,8 +786,9 @@ class MusicService :
                 queueTitle = initialStatus.title
             }
 
-            // Agregar canciones de radio después de la canción actual
-            player.addMediaItems(initialStatus.items.drop(1))
+            // Agregar canciones de radio después de las canciones manuales
+            val insertIndex = findEndOfManualQueue()
+            player.addMediaItems(insertIndex, initialStatus.items.drop(1))
             currentQueue = radioQueue
         }
     }
@@ -826,7 +831,7 @@ class MusicService :
             automixItems.value.toMutableList().apply {
                 removeAt(position)
             }
-        addToQueue(listOf(item))
+        addToQueue(listOf(item.metadata?.copy(manual = true)?.toMediaItem() ?: item))
     }
 
     fun playNextAutomix(
@@ -837,7 +842,7 @@ class MusicService :
             automixItems.value.toMutableList().apply {
                 removeAt(position)
             }
-        playNext(listOf(item))
+        playNext(listOf(item.metadata?.copy(manual = true)?.toMediaItem() ?: item))
     }
 
     fun clearAutomix() {
@@ -845,9 +850,13 @@ class MusicService :
     }
 
     fun playNext(items: List<MediaItem>) {
+        val manualItems = items.map { 
+            it.metadata?.copy(manual = true)?.toMediaItem() ?: it 
+        }
+
         // Si la cola está vacía o el reproductor está inactivo, reproducir inmediatamente
         if (player.mediaItemCount == 0 || player.playbackState == STATE_IDLE) {
-            player.setMediaItems(items)
+            player.setMediaItems(manualItems)
             player.prepare()
             player.play()
             return
@@ -856,8 +865,8 @@ class MusicService :
         val insertIndex = player.currentMediaItemIndex + 1
         val shuffleEnabled = player.shuffleModeEnabled
 
-        // Insertar items inmediatamente después del item actual en el espacio de ventana/índice
-        player.addMediaItems(insertIndex, items)
+        // Insertar items inmediatamente después del item actual
+        player.addMediaItems(insertIndex, manualItems)
         player.prepare()
 
         if (shuffleEnabled) {
@@ -868,7 +877,7 @@ class MusicService :
                 val currentIndex = player.currentMediaItemIndex
 
                 // Los índices recién insertados son un rango contiguo [insertIndex, insertIndex + items.size)
-                val newIndices = (insertIndex until (insertIndex + items.size)).toSet()
+                val newIndices = (insertIndex until (insertIndex + manualItems.size)).toSet()
 
                 // Recopilar el orden de recorrido aleatorio existente excluyendo el índice actual
                 val orderAfter = mutableListOf<Int>()
@@ -886,19 +895,18 @@ class MusicService :
                     if (pIdx == C.INDEX_UNSET) break
                     if (pIdx != currentIndex) prevList.add(pIdx)
                 }
-                prevList.reverse() // preservar el orden hacia adelante original
+                prevList.reverse()
 
                 val existingOrder = (prevList + orderAfter).filter { it != currentIndex && it !in newIndices }
 
-                // Construir nuevo orden aleatorio: actual -> recién insertados (en orden de inserción) -> resto
-                val nextBlock = (insertIndex until (insertIndex + items.size)).toList()
+                // Construir nuevo orden aleatorio: actual -> recién insertados -> resto
+                val nextBlock = (insertIndex until (insertIndex + manualItems.size)).toList()
                 val finalOrder = IntArray(size)
                 var pos = 0
                 finalOrder[pos++] = currentIndex
                 nextBlock.forEach { if (it in 0 until size) finalOrder[pos++] = it }
                 existingOrder.forEach { if (pos < size) finalOrder[pos++] = it }
 
-                // Llenar cualquier índice faltante (seguridad) para asegurar una permutación completa
                 if (pos < size) {
                     for (i in 0 until size) {
                         if (!finalOrder.contains(i)) {
@@ -914,8 +922,24 @@ class MusicService :
     }
 
     fun addToQueue(items: List<MediaItem>) {
-        player.addMediaItems(items)
+        val manualItems = items.map { 
+            it.metadata?.copy(manual = true)?.toMediaItem() ?: it 
+        }
+        val insertIndex = findEndOfManualQueue()
+        player.addMediaItems(insertIndex, manualItems)
         player.prepare()
+    }
+
+    private fun findEndOfManualQueue(): Int {
+        var index = player.currentMediaItemIndex + 1
+        while (index < player.mediaItemCount) {
+            val item = player.getMediaItemAt(index)
+            if (item.metadata?.manual != true) {
+                break
+            }
+            index++
+        }
+        return index
     }
 
     private fun toggleLibrary() {
