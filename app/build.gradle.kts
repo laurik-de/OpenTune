@@ -10,6 +10,12 @@ plugins {
     alias(libs.plugins.compose.compiler)
 }
 
+java {
+    toolchain {
+        languageVersion.set(JavaLanguageVersion.of(21))
+    }
+}
+
 android {
     namespace = "com.arturo254.opentune"
     //noinspection GradleDependency
@@ -20,12 +26,14 @@ android {
         minSdk = 24
         targetSdk = 36
         versionCode = 126
-        versionName = "2.0.12"
+        versionName = "2.0.12-lflavor"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
         release {
+            signingConfig = signingConfigs.getByName("debug")
+
             isMinifyEnabled = true
             isShrinkResources = true
             isCrunchPngs = false
