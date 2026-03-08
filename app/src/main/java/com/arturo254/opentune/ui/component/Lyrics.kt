@@ -566,32 +566,43 @@ fun Lyrics(
         }
     }
 
-    LaunchedEffect(currentLineIndex, lastPreviewTime, initialScrollDone, isAutoScrollEnabled) {
+    LaunchedEffect(currentLineIndex, isSynced) {
         if (!isSynced) return@LaunchedEffect
 
-        if (isAutoScrollEnabled) {
-            if ((currentLineIndex == 0 && shouldScrollToFirstLine) || !initialScrollDone) {
-                shouldScrollToFirstLine = false
-                val initialCenterIndex = kotlin.math.max(0, currentLineIndex)
-                performSmoothPageScroll(initialCenterIndex, 800)
-                if (!isAppMinimized) {
-                    initialScrollDone = true
+        // "Catch-Up" Logic:
+        // If auto-scroll is OFF (user scrolled manually), check if the song has
+        // naturally reached the line currently in the middle of the screen.
+        if (!isAutoScrollEnabled) {
+            val visibleItems = lazyListState.layoutInfo.visibleItemsInfo
+            if (visibleItems.isNotEmpty()) {
+                val viewportCenter = (lazyListState.layoutInfo.viewportEndOffset - lazyListState.layoutInfo.viewportStartOffset) / 2 + lazyListState.layoutInfo.viewportStartOffset
+
+                // Find the item closest to the center visually
+                val centralItem = visibleItems.minByOrNull {
+                    kotlin.math.abs((it.offset + it.size / 2) - viewportCenter)
                 }
-            } else if (currentLineIndex != -1) {
-                deferredCurrentLineIndex = currentLineIndex
-                if (isSeeking) {
-                    val seekCenterIndex = kotlin.math.max(0, currentLineIndex - 1)
-                    performSmoothPageScroll(seekCenterIndex, 500)
-                } else if ((lastPreviewTime == 0L || currentLineIndex != previousLineIndex) && scrollLyrics) {
-                    if (currentLineIndex != previousLineIndex) {
-                        performSmoothPageScroll(currentLineIndex, 1500)
-                    }
+
+                // If the song is now playing the line that the user is looking at, RESYNC.
+                if (centralItem != null && centralItem.index == currentLineIndex) {
+                    isAutoScrollEnabled = true
                 }
             }
         }
-        if (currentLineIndex > 0) {
-            shouldScrollToFirstLine = true
+
+        // Standard Scroll Logic
+        if (isAutoScrollEnabled && currentLineIndex != -1) {
+            // Only scroll if we changed lines
+            if (currentLineIndex != previousLineIndex) {
+                // If the jump is small, smooth scroll. If big (seek), snap.
+                if (kotlin.math.abs(currentLineIndex - previousLineIndex) > 4) {
+                    lazyListState.scrollToItem(currentLineIndex)
+                } else {
+                    // Adjust duration as needed
+                    performSmoothPageScroll(currentLineIndex, 700)
+                }
+            }
         }
+
         previousLineIndex = currentLineIndex
     }
 
@@ -800,13 +811,14 @@ fun Lyrics(
                                     !lyrics.isNullOrEmpty() && lyrics.startsWith("[")
                                 }
                                 val isActiveLine = index == displayedCurrentLineIndex && isSynced
+                                val isTrulyActive = index == currentLineIndex && isSynced
                                 val distance = kotlin.math.abs(index - displayedCurrentLineIndex)
 
                                 LyricsLine(
                                     entry = item,
-                                    isSynced = isSynced,
-                                    isActive = isActiveLine,
-                                    distanceFromCurrent = distance,
+                                    listState = lazyListState,
+                                    index = index,
+                                    isActive = isTrulyActive,
                                     lyricsTextPosition = lyricsTextPosition,
                                     textColor = expressiveAccent,
                                     textSize = 25f,
@@ -827,6 +839,8 @@ fun Lyrics(
                                             }
                                         } else if (isSynced && changeLyrics) {
                                             playerConnection.player.seekTo(item.time)
+                                            isAutoScrollEnabled = true
+                                            currentLineIndex = index
                                             scope.launch {
                                                 performSmoothPageScroll(index, 1500)
                                             }
@@ -845,7 +859,6 @@ fun Lyrics(
                                     },
                                     isSelected = isSelected,
                                     isSelectionModeActive = isSelectionModeActive,
-                                    isAutoScrollActive = isAutoScrollEnabled,
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .clip(RoundedCornerShape(8.dp))
