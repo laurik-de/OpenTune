@@ -22,12 +22,17 @@ import com.arturo254.opentune.di.PlayerCache
 import com.arturo254.opentune.utils.YTPlayerUtils
 import com.arturo254.opentune.utils.enumPreference
 import dagger.hilt.android.qualifiers.ApplicationContext
+import com.arturo254.opentune.lyrics.LyricsHelper
+import com.arturo254.opentune.models.toMediaMetadata
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import okhttp3.OkHttpClient
 import java.util.concurrent.Executor
@@ -43,7 +48,9 @@ constructor(
     val databaseProvider: DatabaseProvider,
     @DownloadCache val downloadCache: SimpleCache,
     @PlayerCache val playerCache: SimpleCache,
+    val lyricsHelper: LyricsHelper,
 ) {
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val connectivityManager = context.getSystemService<ConnectivityManager>()!!
     private val audioQuality by enumPreference(context, AudioQualityKey, AudioQuality.AUTO)
     private val songUrlCache = HashMap<String, Pair<String, Long>>()
@@ -147,6 +154,14 @@ constructor(
                     downloads.update { map ->
                         map.toMutableMap().apply {
                             set(download.request.id, download)
+                        }
+                    }
+                    if (download.state == Download.STATE_QUEUED || download.state == Download.STATE_DOWNLOADING) {
+                        scope.launch {
+                            database.getSongById(download.request.id)?.let { song ->
+                                val mediaMetadata = song.toMediaMetadata()
+                                lyricsHelper.fetchAndStoreLyrics(mediaMetadata)
+                            }
                         }
                     }
                 }

@@ -4,6 +4,8 @@ import android.content.Context
 import android.util.LruCache
 import com.arturo254.opentune.constants.PreferredLyricsProvider
 import com.arturo254.opentune.constants.PreferredLyricsProviderKey
+import com.arturo254.opentune.db.MusicDatabase
+import com.arturo254.opentune.db.entities.LyricsEntity
 import com.arturo254.opentune.db.entities.LyricsEntity.Companion.LYRICS_NOT_FOUND
 import com.arturo254.opentune.extensions.toEnum
 import com.arturo254.opentune.models.MediaMetadata
@@ -18,6 +20,7 @@ class LyricsHelper
 @Inject
 constructor(
     @ApplicationContext private val context: Context,
+    private val database: MusicDatabase,
 ) {
     private var lyricsProviders =
         listOf(
@@ -50,6 +53,25 @@ constructor(
                     }
             }
     private val cache = LruCache<String, List<LyricsResult>>(MAX_CACHE_SIZE)
+
+    suspend fun fetchAndStoreLyrics(mediaMetadata: MediaMetadata): String {
+        val existingLyrics = database.getLyrics(mediaMetadata.id)
+        if (existingLyrics != null) {
+            return existingLyrics.lyrics
+        }
+        val lyrics = getLyrics(mediaMetadata)
+        if (lyrics != LYRICS_NOT_FOUND) {
+            database.query {
+                upsert(
+                    LyricsEntity(
+                        id = mediaMetadata.id,
+                        lyrics = lyrics,
+                    ),
+                )
+            }
+        }
+        return lyrics
+    }
 
     suspend fun getLyrics(mediaMetadata: MediaMetadata): String {
         val cached = cache.get(mediaMetadata.id)?.firstOrNull()
