@@ -758,13 +758,12 @@ fun Lyrics(
                     LazyColumn(
                         state = lazyListState,
                         contentPadding = PaddingValues(
-                            top = topPadding,
-                            bottom = if (isFullscreen) 180.dp else 0.dp,
-                            start = 8.dp,
-                            end = 8.dp
+                            top = with(LocalDensity.current) { (maxHeight / 2) - 30.dp },
+                            bottom = with(LocalDensity.current) { (maxHeight / 2) }
                         ),
                         modifier = Modifier
-                            .fadingEdge(vertical = 32.dp)
+                            .fillMaxSize()
+                            .fadingEdge(vertical = 48.dp)
                             .nestedScroll(nestedScrollConnection)
                     ) {
                         val displayedCurrentLineIndex =
@@ -811,17 +810,16 @@ fun Lyrics(
                                     !lyrics.isNullOrEmpty() && lyrics.startsWith("[")
                                 }
                                 val isActiveLine = index == displayedCurrentLineIndex && isSynced
-                                val isTrulyActive = index == currentLineIndex && isSynced
                                 val distance = kotlin.math.abs(index - displayedCurrentLineIndex)
 
                                 LyricsLine(
                                     entry = item,
-                                    listState = lazyListState,
                                     index = index,
-                                    isActive = isTrulyActive,
+                                    currentLineIndex = currentLineIndex,
+                                    isSynced = isSynced,
                                     lyricsTextPosition = lyricsTextPosition,
                                     textColor = expressiveAccent,
-                                    textSize = 25f,
+                                    textSize = 26f,
                                     lineSpacing = 4f,
                                     onClick = {
                                         if (isSelectionModeActive) {
@@ -858,16 +856,7 @@ fun Lyrics(
                                         }
                                     },
                                     isSelected = isSelected,
-                                    isSelectionModeActive = isSelectionModeActive,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(
-                                            if (isSelected && isSelectionModeActive)
-                                                MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
-                                            else Color.Transparent
-                                        )
-                                        .padding(horizontal = 24.dp, vertical = 4.dp)
+                                    isSelectionModeActive = isSelectionModeActive
                                 )
                             }
                         }
