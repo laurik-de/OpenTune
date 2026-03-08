@@ -350,6 +350,8 @@
     <string name="behaviour">Behaviour</string>
     <string name="swipe_to_queue">Swipe to queue</string>
     <string name="swipe_to_queue_desc">Swipe a song to the right to add it to the queue</string>
+    <string name="swipe_down_to_stop">Swipe down to stop</string>
+    <string name="swipe_down_to_stop_desc">Swipe down the mini player to stop playback and clear the queue</string>
 
     <string name="storage">Storage</string>
     <string name="cache">Cache</string>

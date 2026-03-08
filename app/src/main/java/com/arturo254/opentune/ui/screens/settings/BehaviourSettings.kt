@@ -9,6 +9,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.navigation.NavController
 import com.arturo254.opentune.R
+import com.arturo254.opentune.constants.StopOnSwipeDownKey
 import com.arturo254.opentune.constants.SwipeToQueueKey
 import com.arturo254.opentune.ui.component.SettingsGeneralCategory
 import com.arturo254.opentune.ui.component.SettingsPage
@@ -23,6 +24,10 @@ fun BehaviourSettings(
 ) {
     val (swipeToQueue, onSwipeToQueueChange) = rememberPreference(
         SwipeToQueueKey,
+        defaultValue = true
+    )
+    val (stopOnSwipeDown, onStopOnSwipeDownChange) = rememberPreference(
+        StopOnSwipeDownKey,
         defaultValue = true
     )
 
@@ -41,6 +46,15 @@ fun BehaviourSettings(
                         icon = { Icon(painterResource(R.drawable.queue_music), null) },
                         checked = swipeToQueue,
                         onCheckedChange = onSwipeToQueueChange
+                    )
+                },
+                {
+                    SwitchPreference(
+                        title = { Text(stringResource(R.string.swipe_down_to_stop)) },
+                        description = stringResource(R.string.swipe_down_to_stop_desc),
+                        icon = { Icon(painterResource(R.drawable.close), null) },
+                        checked = stopOnSwipeDown,
+                        onCheckedChange = onStopOnSwipeDownChange
                     )
                 },
             )

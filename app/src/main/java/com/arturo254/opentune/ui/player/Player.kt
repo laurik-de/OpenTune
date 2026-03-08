@@ -147,6 +147,7 @@ import com.arturo254.opentune.constants.ShowLyricsKey
 import com.arturo254.opentune.constants.SliderStyle
 import com.arturo254.opentune.constants.SliderStyleKey
 import com.arturo254.opentune.constants.SmallButtonsShapeKey
+import com.arturo254.opentune.constants.StopOnSwipeDownKey
 import com.arturo254.opentune.extensions.togglePlayPause
 import com.arturo254.opentune.extensions.toggleRepeatMode
 import com.arturo254.opentune.models.MediaMetadata
@@ -240,6 +241,7 @@ fun BottomSheetPlayer(
 
     val showLyrics by rememberPreference(ShowLyricsKey, defaultValue = false)
     val sliderStyle by rememberEnumPreference(SliderStyleKey, SliderStyle.SQUIGGLY)
+    val stopOnSwipeDown by rememberPreference(StopOnSwipeDownKey, defaultValue = true)
 
     var position by rememberSaveable(playbackState) {
         mutableLongStateOf(playerConnection.player.currentPosition)
@@ -805,11 +807,13 @@ fun BottomSheetPlayer(
                 }
             }
         },
-        onDismiss = {
-            playerConnection.service.clearAutomix()
-            playerConnection.player.stop()
-            playerConnection.player.clearMediaItems()
-        },
+        onDismiss = if (stopOnSwipeDown) {
+            {
+                playerConnection.service.clearAutomix()
+                playerConnection.player.stop()
+                playerConnection.player.clearMediaItems()
+            }
+        } else null,
         collapsedContent = {
             MiniPlayer(
                 position = position,
