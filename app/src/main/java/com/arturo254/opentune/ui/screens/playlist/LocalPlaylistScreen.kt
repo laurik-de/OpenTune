@@ -229,6 +229,13 @@ fun LocalPlaylistScreen(
         mutableStateOf(false)
     }
 
+    // 🔥 CORRECCIÓN: Limpiar selecciones al salir del modo selección
+    LaunchedEffect(selection) {
+        if (!selection) {
+            wrappedSongs.forEach { it.isSelected = false }
+        }
+    }
+
     if (selection) {
         BackHandler {
             selection = false
@@ -551,7 +558,9 @@ fun LocalPlaylistScreen(
 
                                 var isVisible by remember { mutableStateOf(true) }
 
-                                @SuppressLint("StringFormatInvalid")
+                                @SuppressLint("StringFormatInvalid",
+                                    "LocalContextGetResourceValueCall"
+                                )
                                 fun deleteFromPlaylist() {
                                     isVisible = false
                                     coroutineScope.launch {
@@ -682,9 +691,8 @@ fun LocalPlaylistScreen(
                                                                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                                                         if (!selection) {
                                                                             selection = true
+                                                                            wrappedSongs.find { it.item.map.id == song.map.id }?.isSelected = true
                                                                         }
-                                                                        wrappedSongs.forEach { it.isSelected = false }
-                                                                        wrappedSongs.find { it.item.map.id == song.map.id }?.isSelected = true
                                                                     },
                                                                 )
                                                     )
@@ -721,7 +729,9 @@ fun LocalPlaylistScreen(
 
                                 var isVisible by remember { mutableStateOf(true) }
 
-                                @SuppressLint("StringFormatInvalid")
+                                @SuppressLint("StringFormatInvalid",
+                                    "LocalContextGetResourceValueCall"
+                                )
                                 fun deleteFromPlaylist() {
                                     isVisible = false
                                     coroutineScope.launch {
@@ -843,9 +853,8 @@ fun LocalPlaylistScreen(
                                                                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                                                         if (!selection) {
                                                                             selection = true
+                                                                            songWrapper.isSelected = true
                                                                         }
-                                                                        wrappedSongs.forEach { it.isSelected = false }
-                                                                        songWrapper.isSelected = true
                                                                     },
                                                                 ),
                                                     )
@@ -1042,6 +1051,7 @@ fun LocalPlaylistScreen(
     }
 }
 
+@SuppressLint("LocalContextGetResourceValueCall")
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun LocalPlaylistHeader(

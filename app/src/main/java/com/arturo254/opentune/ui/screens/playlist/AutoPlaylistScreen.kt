@@ -182,6 +182,13 @@ fun AutoPlaylistScreen(
 
     var selection by remember { mutableStateOf(false) }
 
+    // 🔥 CORRECCIÓN: Limpiar selecciones al salir del modo selección
+    LaunchedEffect(selection) {
+        if (!selection) {
+            wrappedSongs.forEach { it.isSelected = false }
+        }
+    }
+
     if (isSearching) {
         BackHandler {
             isSearching = false
@@ -695,9 +702,8 @@ fun AutoPlaylistScreen(
                                                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                                         if (!selection) {
                                                             selection = true
+                                                            songWrapper.isSelected = true
                                                         }
-                                                        wrappedSongs?.forEach { it.isSelected = false }
-                                                        songWrapper.isSelected = true
                                                     },
                                                 )
                                         )
