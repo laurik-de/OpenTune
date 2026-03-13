@@ -1261,17 +1261,27 @@ class MusicService :
     private fun createDataSourceFactory(): DataSource.Factory {
         val songUrlCache = HashMap<String, Pair<String, Long>>()
         return ResolvingDataSource.Factory(createCacheDataSource()) { dataSpec ->
-            val mediaId = dataSpec.key ?: error("No media id")
+            val mediaId = dataSpec.key ?: throw PlaybackException(
+                "No media id found",
+                null,
+                PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS
+            )
 
-            if (downloadCache.isCached(
-                    mediaId,
-                    dataSpec.position,
-                    if (dataSpec.length >= 0) dataSpec.length else 1
-                ) ||
-                playerCache.isCached(mediaId, dataSpec.position, CHUNK_LENGTH)
-            ) {
+            val checkLength = if (dataSpec.length >= 0) dataSpec.length else 1
+            val isCached = downloadCache.isCached(mediaId, dataSpec.position, checkLength) ||
+                    playerCache.isCached(mediaId, dataSpec.position, checkLength)
+
+            if (isCached) {
                 scope.launch(Dispatchers.IO) { recoverSong(mediaId) }
                 return@Factory dataSpec
+            }
+
+            if (!isNetworkConnected.value) {
+                throw PlaybackException(
+                    getString(R.string.error_no_internet),
+                    null,
+                    PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED
+                )
             }
 
             songUrlCache[mediaId]?.takeIf { it.second > System.currentTimeMillis() }?.let {
@@ -1340,7 +1350,6 @@ class MusicService :
                 songUrlCache[mediaId] =
                     streamUrl to System.currentTimeMillis() + (playbackData.streamExpiresInSeconds * 1000L)
                 return@Factory dataSpec.withUri(streamUrl.toUri())
-                    .subrange(dataSpec.uriPositionOffset, CHUNK_LENGTH)
             } catch (e: Exception) {
                 Timber.tag(ytLogTag).e(e, "YouTube playback error, trying JossRed as fallback")
 

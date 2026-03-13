@@ -72,10 +72,15 @@ class App : Application(), ImageLoaderFactory {
 
         if (dataStore[ProxyEnabledKey] == true) {
             try {
-                YouTube.proxy = Proxy(
-                    dataStore[ProxyTypeKey].toEnum(defaultValue = Proxy.Type.HTTP),
-                    dataStore[ProxyUrlKey]!!.toInetSocketAddress()
-                )
+                val proxyUrl = dataStore[ProxyUrlKey]
+                if (proxyUrl != null) {
+                    YouTube.proxy = Proxy(
+                        dataStore[ProxyTypeKey].toEnum(defaultValue = Proxy.Type.HTTP),
+                        proxyUrl.toInetSocketAddress()
+                    )
+                } else {
+                    Timber.w("Proxy enabled but URL is null.")
+                }
             } catch (e: Exception) {
                 Toast.makeText(this, "Failed to parse proxy url.", LENGTH_SHORT).show()
                 reportException(e)
@@ -153,6 +158,7 @@ class App : Application(), ImageLoaderFactory {
                 .respectCacheHeaders(false)
                 .allowHardware(Build.VERSION.SDK_INT >= Build.VERSION_CODES.P)
                 .diskCachePolicy(CachePolicy.DISABLED)
+                .memoryCachePolicy(CachePolicy.DISABLED)
                 .build()
         }
 
