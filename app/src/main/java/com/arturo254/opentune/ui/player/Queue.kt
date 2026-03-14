@@ -135,11 +135,13 @@ import sh.calvin.reorderable.rememberReorderableLazyListState
 sealed class QueueItem {
     abstract val key: Any
 
-    data class Header(val resId: Int) : QueueItem() {
-        override val key = "header_$resId"
-    }
 
-    data class WindowItem(val window: Timeline.Window, val index: Int) : QueueItem() {
+    data class WindowItem(
+        val window: Timeline.Window,
+        val index: Int,
+        val headerResId: Int? = null,
+        val footerHeaderResId: Int? = null
+    ) : QueueItem() {
         override val key = window.uid.hashCode()
     }
 }
@@ -341,73 +343,106 @@ fun Queue(
 
         val headerItems = 1
         val lazyListState = rememberLazyListState()
-        val listItems = remember(currentWindowIndex) {
-            derivedStateOf {
-                buildList {
-                    if (currentWindowIndex > 0 && currentWindowIndex <= mutableQueueWindows.size) {
-                        add(QueueItem.Header(R.string.history))
-                        for (i in 0 until currentWindowIndex) {
-                            mutableQueueWindows.getOrNull(i)?.let {
-                                add(QueueItem.WindowItem(it, i))
-                            }
-                        }
-                    }
-                    if (currentWindowIndex >= 0 && currentWindowIndex < mutableQueueWindows.size) {
-                        add(QueueItem.Header(R.string.currently_playing))
-                        mutableQueueWindows.getOrNull(currentWindowIndex)?.let {
-                            add(QueueItem.WindowItem(it, currentWindowIndex))
-                        }
-                    }
-                    if (currentWindowIndex < mutableQueueWindows.size) {
-                        val remainingItems = mutableQueueWindows.drop(currentWindowIndex + 1)
-                        val manualItemsAfter = remainingItems.takeWhile { it.mediaItem.metadata?.manual == true }
-                        if (manualItemsAfter.isNotEmpty()) {
-                            add(QueueItem.Header(R.string.up_next))
-                            manualItemsAfter.forEachIndexed { i, w ->
-                                add(QueueItem.WindowItem(w, currentWindowIndex + 1 + i))
-                            }
-                        }
-                        val autoItemsAfter = remainingItems.drop(manualItemsAfter.size)
-                        if (autoItemsAfter.isNotEmpty()) {
-                            add(QueueItem.Header(R.string.following))
-                            autoItemsAfter.forEachIndexed { i, w ->
-                                add(QueueItem.WindowItem(w, currentWindowIndex + 1 + manualItemsAfter.size + i))
-                            }
-                        }
-                    }
-                }
-            }
-        }
+
+        var dragFromIndex by remember { mutableStateOf(-1) }
+        var dragToIndex by remember { mutableStateOf(-1) }
 
         val reorderableState = rememberReorderableLazyListState(
             lazyListState = lazyListState,
             onMove = { from, to ->
-                val fromItem = listItems.value.getOrNull(from.index - headerItems)
-                val toItem = listItems.value.getOrNull(to.index - headerItems)
+                val safeFrom = mutableQueueWindows.indexOfFirst { it.uid.hashCode() == from.key }
+                val safeTo = mutableQueueWindows.indexOfFirst { it.uid.hashCode() == to.key }
 
-                if (fromItem is QueueItem.WindowItem && toItem is QueueItem.WindowItem && mutableQueueWindows.isNotEmpty()) {
-                    val safeFrom = fromItem.index.coerceIn(0, mutableQueueWindows.lastIndex)
-                    val safeTo = toItem.index.coerceIn(0, mutableQueueWindows.lastIndex)
-
+                if (safeFrom != -1 && safeTo != -1 && mutableQueueWindows.isNotEmpty()) {
                     mutableQueueWindows.move(safeFrom, safeTo)
 
+                    if (dragFromIndex == -1) dragFromIndex = safeFrom
+                    dragToIndex = safeTo
+                }
+            }
+        )
+
+        val isAnyItemDragging by derivedStateOf { reorderableState.isAnyItemDragging }
+
+        var dragStartCurrentWindowIndex by remember { mutableStateOf(-1) }
+        val localCurrentWindowIndexState = remember(currentWindowIndex, isAnyItemDragging) {
+            derivedStateOf {
+                if (isAnyItemDragging && dragStartCurrentWindowIndex != -1) {
+                    // Determine what uid was initially playing
+                    val currentlyPlayingUid = queueWindows.getOrNull(dragStartCurrentWindowIndex)?.uid
+                    // Find its current position in the dragged list
+                    val newIndex = mutableQueueWindows.indexOfFirst { it.uid == currentlyPlayingUid }
+                    if (newIndex != -1) newIndex else dragStartCurrentWindowIndex
+                } else {
+                    val currentlyPlayingUid = queueWindows.getOrNull(currentWindowIndex)?.uid
+                    val realIndex = mutableQueueWindows.indexOfFirst { it.uid == currentlyPlayingUid }
+                    if (realIndex != -1) realIndex else currentWindowIndex
+                }
+            }
+        }
+        val localCurrentWindowIndex by localCurrentWindowIndexState
+
+        LaunchedEffect(isAnyItemDragging) {
+            if (isAnyItemDragging) {
+                dragStartCurrentWindowIndex = currentWindowIndex
+                dragFromIndex = -1
+                dragToIndex = -1
+            } else {
+                if (dragFromIndex != -1 && dragToIndex != -1) {
                     if (!playerConnection.player.shuffleModeEnabled) {
-                        playerConnection.player.moveMediaItem(safeFrom, safeTo)
+                        playerConnection.player.moveMediaItem(dragFromIndex, dragToIndex)
                     } else {
                         playerConnection.player.setShuffleOrder(
                             DefaultShuffleOrder(
                                 queueWindows
                                     .map { it.firstPeriodIndex }
                                     .toMutableList()
-                                    .move(safeFrom, safeTo)
+                                    .move(dragFromIndex, dragToIndex)
                                     .toIntArray(),
                                 System.currentTimeMillis(),
                             ),
                         )
                     }
                 }
+                dragFromIndex = -1
+                dragToIndex = -1
+                dragStartCurrentWindowIndex = -1
             }
-        )
+        }
+
+        val listItems = remember(mutableQueueWindows) {
+            derivedStateOf {
+                val index = localCurrentWindowIndexState.value
+                val manualAfterCount = mutableQueueWindows
+                    .drop(index + 1)
+                    .takeWhile { it.mediaItem.metadata?.manual == true }
+                    .size
+
+                mutableQueueWindows.mapIndexed { i, mWindow ->
+                    var headerResId: Int? = null
+                    var footerHeaderResId: Int? = null
+
+                    if (index > 0 && i == 0) {
+                        headerResId = R.string.history
+                    }
+                    if (i == index) {
+                        headerResId = R.string.currently_playing
+                        if (manualAfterCount > 0) {
+                            footerHeaderResId = R.string.up_next
+                        } else if (i + 1 < mutableQueueWindows.size) {
+                            footerHeaderResId = R.string.following
+                        }
+                    } else if (i == index + 1 + manualAfterCount && i < mutableQueueWindows.size) {
+                        // Only show second Following header if there was an Up Next section
+                        if (manualAfterCount > 0) {
+                            headerResId = R.string.following
+                        }
+                    }
+
+                    QueueItem.WindowItem(mWindow, i, headerResId, footerHeaderResId)
+                }
+            }
+        }
 
         LaunchedEffect(queueWindows) {
             mutableQueueWindows.apply {
@@ -461,16 +496,22 @@ fun Queue(
                     items = listItems.value,
                     key = { it.key },
                 ) { item ->
-                    when (item) {
-                        is QueueItem.Header -> SectionHeader(stringResource(item.resId))
-                        is QueueItem.WindowItem -> {
-                            val window = item.window
-                            val index = item.index
-                            ReorderableItem(
-                                state = reorderableState,
-                                key = item.key,
-                            ) {
-                                val currentItem by rememberUpdatedState(window)
+                    val windowItem = item as QueueItem.WindowItem
+                    ReorderableItem(
+                        state = reorderableState,
+                        key = item.key,
+                    ) {
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            if (windowItem.headerResId != null) {
+                                SectionHeader(
+                                    text = stringResource(windowItem.headerResId),
+                                    modifier = Modifier.animateItem()
+                                )
+                            }
+
+                            val window = windowItem.window
+                            val index = windowItem.index
+                            val currentItem by rememberUpdatedState(window)
                                 var isTouching by remember { mutableStateOf(false) }
                                 var dragX by remember { mutableStateOf(0f) }
                                 var width by remember { mutableStateOf(0) }
@@ -533,7 +574,7 @@ fun Queue(
                                         MediaMetadataListItem(
                                             mediaMetadata = window.mediaItem.metadata!!,
                                             isSelected = selection && window.mediaItem.metadata!! in selectedSongs,
-                                            isActive = index == currentWindowIndex,
+                                            isActive = index == localCurrentWindowIndex,
                                             isPlaying = isPlaying,
                                             trailingContent = {
                                                 if (!locked) {
@@ -584,7 +625,7 @@ fun Queue(
                                                                 selectedItems.add(currentItem)
                                                             }
                                                         } else {
-                                                            if (index == currentWindowIndex) {
+                                                            if (index == localCurrentWindowIndex) {
                                                                 playerConnection.player.togglePlayPause()
                                                             } else {
                                                                 playerConnection.player.seekToDefaultPosition(
@@ -667,6 +708,12 @@ fun Queue(
                                         content()
                                     }
                                 }
+
+                            if (windowItem.footerHeaderResId != null) {
+                                SectionHeader(
+                                    text = stringResource(windowItem.footerHeaderResId),
+                                    modifier = Modifier.animateItem()
+                                )
                             }
                         }
                     }
@@ -845,7 +892,7 @@ fun Queue(
                                 selectedSongs.clear()
                                 selectedItems.clear()
                             } else {
-                                queueWindows
+                                 queueWindows
                                     .filter { it.mediaItem.metadata!! !in selectedSongs }
                                     .forEach {
                                         selectedSongs.add(it.mediaItem.metadata!!)
