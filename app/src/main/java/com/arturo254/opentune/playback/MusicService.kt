@@ -1069,6 +1069,7 @@ class MusicService :
 
         // Resetear errores consecutivos cuando hay transición exitosa
         consecutivePlaybackErr = 0
+        waitingForNetworkConnection.value = false
 
         // Auto cargar más canciones
         if (dataStore.get(AutoLoadMoreKey, true) &&

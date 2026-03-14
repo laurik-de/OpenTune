@@ -108,7 +108,7 @@ fun Thumbnail(
     Box(modifier = modifier) {
 
         AnimatedVisibility(
-            visible = error == null,
+            visible = true,
             enter = fadeIn(),
             exit = fadeOut(),
             modifier = Modifier.fillMaxSize().statusBarsPadding()

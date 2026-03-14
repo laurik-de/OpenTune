@@ -238,6 +238,8 @@ fun BottomSheetPlayer(
 
     val canSkipPrevious by playerConnection.canSkipPrevious.collectAsState()
     val canSkipNext by playerConnection.canSkipNext.collectAsState()
+    val error by playerConnection.error.collectAsState()
+    val waitingForNetworkConnection by playerConnection.waitingForNetworkConnection.collectAsState()
 
     val showLyrics by rememberPreference(ShowLyricsKey, defaultValue = false)
     val sliderStyle by rememberEnumPreference(SliderStyleKey, SliderStyle.SQUIGGLY)
@@ -1133,6 +1135,50 @@ fun BottomSheetPlayer(
                             )
                         },
                         modifier = Modifier.padding(horizontal = PlayerHorizontalPadding)
+                    )
+                }
+            }
+
+            AnimatedVisibility(
+                visible = waitingForNetworkConnection || error != null,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = PlayerHorizontalPadding)
+                    .padding(bottom = 8.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(
+                            if (error != null) MaterialTheme.colorScheme.errorContainer
+                            else MaterialTheme.colorScheme.secondaryContainer,
+                            RoundedCornerShape(8.dp)
+                        )
+                        .padding(8.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        painter = painterResource(
+                            if (error != null) R.drawable.error else R.drawable.wifi_off
+                        ),
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = if (error != null) MaterialTheme.colorScheme.onErrorContainer
+                        else MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = when {
+                            waitingForNetworkConnection -> stringResource(R.string.waiting_for_network)
+                            error != null -> error?.message ?: stringResource(R.string.error_unknown)
+                            else -> ""
+                        },
+                        style = MaterialTheme.typography.labelMedium,
+                        color = if (error != null) MaterialTheme.colorScheme.onErrorContainer
+                        else MaterialTheme.colorScheme.onSecondaryContainer
                     )
                 }
             }

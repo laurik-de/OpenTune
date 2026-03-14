@@ -153,6 +153,8 @@ class PlayerConnection(
     private val _error = MutableStateFlow<PlaybackException?>(null)
     val error: StateFlow<PlaybackException?> = _error.asStateFlow()
 
+    val waitingForNetworkConnection = service.waitingForNetworkConnection.asStateFlow()
+
     // Control de actualizaciones
     private val updateScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private val progressUpdateHandler = Handler(Looper.getMainLooper())
