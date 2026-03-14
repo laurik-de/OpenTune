@@ -12,6 +12,7 @@ import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.offline.Download
 import androidx.media3.exoplayer.offline.DownloadManager
 import androidx.media3.exoplayer.offline.DownloadNotificationHelper
+import coil.imageLoader
 import com.arturo254.innertube.YouTube
 import com.arturo254.opentune.constants.AudioQuality
 import com.arturo254.opentune.constants.AudioQualityKey
@@ -161,6 +162,13 @@ constructor(
                             database.getSongById(download.request.id)?.let { song ->
                                 val mediaMetadata = song.toMediaMetadata()
                                 lyricsHelper.fetchAndStoreLyrics(mediaMetadata)
+                                mediaMetadata.thumbnailUrl?.let { url ->
+                                    val request =
+                                        coil.request.ImageRequest.Builder(context)
+                                            .data(url)
+                                            .build()
+                                    context.imageLoader.enqueue(request)
+                                }
                             }
                         }
                     }

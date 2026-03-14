@@ -58,6 +58,7 @@ import androidx.media3.session.MediaController
 import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaSession
 import androidx.media3.session.SessionToken
+import coil.imageLoader
 import com.arturo254.innertube.YouTube
 import com.arturo254.innertube.models.SongItem
 import com.arturo254.innertube.models.WatchEndpoint
@@ -335,6 +336,13 @@ class MusicService :
             .collectLatest(scope) { mediaMetadata ->
                 if (mediaMetadata != null) {
                     lyricsHelper.fetchAndStoreLyrics(mediaMetadata)
+                    mediaMetadata.thumbnailUrl?.let { url ->
+                        val request =
+                            coil.request.ImageRequest.Builder(this@MusicService)
+                                .data(url)
+                                .build()
+                        imageLoader.enqueue(request)
+                    }
                 }
             }
 
