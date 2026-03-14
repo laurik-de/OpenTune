@@ -108,7 +108,7 @@ constructor(
 
             val streamUrl = playbackData.streamUrl.let {
                 // Specify range to avoid YouTube's throttling
-                "${it}&range=0-${format.contentLength ?: 10000000}"
+                "${it}&range=0-${format.contentLength ?: 20_000_000L}"
             }
 
             songUrlCache[mediaId] =

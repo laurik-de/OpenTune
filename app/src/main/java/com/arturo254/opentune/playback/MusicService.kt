@@ -1237,6 +1237,20 @@ class MusicService :
             return
         }
 
+        // Proactively clear cache if we hit a source error that might be due to corruption
+        if (error.errorCode == PlaybackException.ERROR_CODE_IO_UNSPECIFIED || error.errorCode == PlaybackException.ERROR_CODE_IO_READ_POSITION_OUT_OF_RANGE) {
+            player.currentMediaItem?.localConfiguration?.uri?.let { uri ->
+                val mediaId = player.currentMediaItem?.mediaId
+                if (mediaId != null) {
+                    scope.launch(Dispatchers.IO) {
+                        playerCache.removeResource(mediaId)
+                        downloadCache.removeResource(mediaId)
+                        Timber.tag(TAG).i("Evicted $mediaId from cache due to source error")
+                    }
+                }
+            }
+        }
+
         if (dataStore.get(AutoSkipNextOnErrorKey, false)) {
             skipOnError()
         } else {
@@ -1357,7 +1371,7 @@ class MusicService :
                             codecs = format.mimeType.split("codecs=")[1].removeSurrounding("\""),
                             bitrate = format.bitrate,
                             sampleRate = format.audioSampleRate,
-                            contentLength = format.contentLength!!,
+                            contentLength = format.contentLength ?: 0L,
                             loudnessDb = playbackData.audioConfig?.loudnessDb,
                             playbackUrl = playbackData.streamUrl
                         )
@@ -1365,7 +1379,10 @@ class MusicService :
                 }
                 scope.launch(Dispatchers.IO) { recoverSong(mediaId, playbackData) }
 
-                val streamUrl = playbackData.streamUrl
+                val streamUrl = playbackData.streamUrl.let {
+                    val limit = format.contentLength ?: 20_000_000L // 20MB fallback
+                    "${it}&range=0-$limit"
+                }
 
                 songUrlCache[mediaId] =
                     streamUrl to System.currentTimeMillis() + (playbackData.streamExpiresInSeconds * 1000L)
