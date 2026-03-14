@@ -675,6 +675,8 @@
     <string name="start_timer">Start</string>
     <string name="sleep_timer_active">Active timer:</string>
     <string name="sleep_timer_desc">Schedule automatic shutdown</string>
+    <string name="could_not_fetch_lyrics">Could not fetch lyrics.</string>
+    <string name="no_lyrics_available">No lyrics available for this song.</string>
 
 
 </resources>

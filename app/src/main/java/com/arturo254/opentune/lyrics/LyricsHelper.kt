@@ -54,30 +54,36 @@ constructor(
             }
     private val cache = LruCache<String, List<LyricsResult>>(MAX_CACHE_SIZE)
 
-    suspend fun fetchAndStoreLyrics(mediaMetadata: MediaMetadata): String {
+    suspend fun fetchAndStoreLyrics(mediaMetadata: MediaMetadata): Result<String> {
         val existingLyrics = database.getLyrics(mediaMetadata.id)
         if (existingLyrics != null) {
-            return existingLyrics.lyrics
+            return Result.success(existingLyrics.lyrics)
         }
-        val lyrics = getLyrics(mediaMetadata)
-        if (lyrics != LYRICS_NOT_FOUND) {
-            database.query {
-                upsert(
-                    LyricsEntity(
-                        id = mediaMetadata.id,
-                        lyrics = lyrics,
-                    ),
-                )
+        val result = getLyrics(mediaMetadata)
+        result.onSuccess { lyrics ->
+            if (lyrics != LYRICS_NOT_FOUND) {
+                database.query {
+                    upsert(
+                        LyricsEntity(
+                            id = mediaMetadata.id,
+                            lyrics = lyrics,
+                        ),
+                    )
+                }
             }
         }
-        return lyrics
+        return result
     }
 
-    suspend fun getLyrics(mediaMetadata: MediaMetadata): String {
+    suspend fun getLyrics(mediaMetadata: MediaMetadata): Result<String> {
         val cached = cache.get(mediaMetadata.id)?.firstOrNull()
         if (cached != null) {
-            return cached.lyrics
+            return Result.success(cached.lyrics)
         }
+        
+        var lastError: Throwable? = null
+        var foundNotFound = false
+
         lyricsProviders.forEach { provider ->
             if (provider.isEnabled(context)) {
                 provider
@@ -87,13 +93,23 @@ constructor(
                         mediaMetadata.artists.joinToString { it.name },
                         mediaMetadata.duration,
                     ).onSuccess { lyrics ->
-                        return lyrics
+                        if (lyrics != LYRICS_NOT_FOUND) {
+                            return Result.success(lyrics)
+                        } else {
+                            foundNotFound = true
+                        }
                     }.onFailure {
+                        lastError = it
                         reportException(it)
                     }
             }
         }
-        return LYRICS_NOT_FOUND
+
+        return when {
+            foundNotFound -> Result.success(LYRICS_NOT_FOUND)
+            lastError != null -> Result.failure(lastError!!)
+            else -> Result.success(LYRICS_NOT_FOUND)
+        }
     }
 
     suspend fun getAllLyrics(

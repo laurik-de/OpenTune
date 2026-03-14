@@ -58,10 +58,11 @@ constructor(
     ) {
         database.query {
             lyricsEntity?.let(::delete)
-            val lyrics =
+            val lyricsResult =
                 runBlocking {
                     lyricsHelper.getLyrics(mediaMetadata)
                 }
+            val lyrics = lyricsResult.getOrDefault(LyricsEntity.LYRICS_NOT_FOUND)
             upsert(LyricsEntity(mediaMetadata.id, lyrics))
         }
     }

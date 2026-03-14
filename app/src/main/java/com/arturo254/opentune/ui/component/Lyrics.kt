@@ -252,6 +252,8 @@ fun Lyrics(
         mutableStateOf<LyricsEntity?>(lyricsCache[currentSongId])
     }
     var isLoadingLyrics by remember(currentSongId) { mutableStateOf(false) }
+    var isFetchError by remember(currentSongId) { mutableStateOf(false) }
+    var refreshTrigger by remember { mutableIntStateOf(0) }
 
     val lyricsEntity by playerConnection.currentLyrics.collectAsState(initial = null)
     val lyrics = remember(lyricsEntity) { lyricsEntity?.lyrics?.trim() }
@@ -332,22 +334,26 @@ fun Lyrics(
         }
     }
 
-    LaunchedEffect(currentSongId) {
+    LaunchedEffect(currentSongId, refreshTrigger) {
         currentSongId?.let { songId ->
-            if (lyricsCache.containsKey(songId)) {
+            if (lyricsCache.containsKey(songId) && refreshTrigger == 0) {
                 currentLyricsEntity = lyricsCache[songId]
+                isFetchError = false
                 return@LaunchedEffect
             }
 
             isLoadingLyrics = true
+            isFetchError = false
 
             withContext(Dispatchers.IO) {
                 try {
-                    val existingLyrics = try {
-                        database.getLyrics(songId)
-                    } catch (e: Throwable) {
-                        null
-                    }
+                    val existingLyrics = if (refreshTrigger == 0) {
+                        try {
+                            database.getLyrics(songId)
+                        } catch (e: Throwable) {
+                            null
+                        }
+                    } else null
 
                     if (existingLyrics != null) {
                         val newCache = lyricsCache.toMutableMap().apply {
@@ -362,41 +368,36 @@ fun Lyrics(
                                 com.arturo254.opentune.di.LyricsHelperEntryPoint::class.java
                             )
                             val lyricsHelper = entryPoint.lyricsHelper()
-                            val fetchedLyrics: String? = currentMetadata.let { lyricsHelper.getLyrics(it) }
+                            val result: Result<String> = currentMetadata.let { lyricsHelper.getLyrics(it!!) }
 
-                            val entity = if (!fetchedLyrics.isNullOrBlank()) {
-                                LyricsEntity(songId, fetchedLyrics)
-                            } else {
-                                LyricsEntity(songId, LYRICS_NOT_FOUND)
-                            }
-
-                            try {
-                                database.query {
-                                    upsert(entity)
+                            result.onSuccess { fetchedLyrics ->
+                                val entity = if (!fetchedLyrics.isNullOrBlank()) {
+                                    LyricsEntity(songId, fetchedLyrics)
+                                } else {
+                                    LyricsEntity(songId, LYRICS_NOT_FOUND)
                                 }
-                            } catch (e: Throwable) {}
 
-                            val newCache = lyricsCache.toMutableMap().apply {
-                                put(songId, entity)
+                                try {
+                                    database.query {
+                                        upsert(entity)
+                                    }
+                                } catch (e: Throwable) {}
+
+                                val newCache = lyricsCache.toMutableMap().apply {
+                                    put(songId, entity)
+                                }
+                                lyricsCache = newCache
+                                currentLyricsEntity = entity
+                                isFetchError = false
+                            }.onFailure {
+                                isFetchError = true
                             }
-                            lyricsCache = newCache
-                            currentLyricsEntity = entity
                         } catch (e: Throwable) {
-                            val errorEntity = LyricsEntity(songId, LYRICS_NOT_FOUND)
-                            val newCache = lyricsCache.toMutableMap().apply {
-                                put(songId, errorEntity)
-                            }
-                            lyricsCache = newCache
-                            currentLyricsEntity = errorEntity
+                            isFetchError = true
                         }
                     }
                 } catch (e: Exception) {
-                    val errorEntity = LyricsEntity(songId, LYRICS_NOT_FOUND)
-                    val newCache = lyricsCache.toMutableMap().apply {
-                        put(songId, errorEntity)
-                    }
-                    lyricsCache = newCache
-                    currentLyricsEntity = errorEntity
+                    isFetchError = true
                 } finally {
                     isLoadingLyrics = false
                 }
@@ -405,7 +406,7 @@ fun Lyrics(
     }
 
     val lines = remember(lyrics, scope) {
-        if (lyrics == null || lyrics == LYRICS_NOT_FOUND) {
+        if (lyrics == null || lyrics == LYRICS_NOT_FOUND || lyrics.lines().size <= 1) {
             emptyList()
         } else if (lyrics.startsWith("[")) {
             val parsedLines = parseLyrics(lyrics)
@@ -895,8 +896,58 @@ fun Lyrics(
                         }
                     }
 
-                    // Lyrics not found
-                    if (lyrics == LYRICS_NOT_FOUND) {
+                    // Lyrics fetching error
+                    if (isFetchError) {
+                        Card(
+                            modifier = Modifier
+                                .align(Alignment.Center)
+                                .fillMaxWidth(0.8f)
+                                .padding(vertical = 32.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.9f)
+                            ),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(20.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Icon(
+                                    painter = painterResource(R.drawable.error),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(32.dp),
+                                    tint = MaterialTheme.colorScheme.onErrorContainer
+                                )
+
+                                Text(
+                                    text = stringResource(R.string.could_not_fetch_lyrics),
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = MaterialTheme.colorScheme.onErrorContainer,
+                                    textAlign = TextAlign.Center
+                                )
+
+                                androidx.compose.material3.Button(
+                                    onClick = { refreshTrigger++ },
+                                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                                        containerColor = MaterialTheme.colorScheme.error,
+                                        contentColor = MaterialTheme.colorScheme.onError
+                                    ),
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.refetch),
+                                        style = MaterialTheme.typography.labelLarge
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Lyrics not found or empty
+                    if (!isFetchError && (lyrics == LYRICS_NOT_FOUND || (lyrics != null && lyrics.lines().size <= 1))) {
                         Card(
                             modifier = Modifier
                                 .align(Alignment.Center)
@@ -922,18 +973,25 @@ fun Lyrics(
                                 )
 
                                 Text(
-                                    text = stringResource(R.string.lyrics_not_found),
+                                    text = stringResource(if (lyrics == LYRICS_NOT_FOUND) R.string.lyrics_not_found else R.string.no_lyrics_available),
                                     style = MaterialTheme.typography.titleSmall,
                                     color = MaterialTheme.colorScheme.onSurface,
                                     textAlign = TextAlign.Center
                                 )
 
-                                Text(
-                                    text = "Las letras no están disponibles para esta canción",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    textAlign = TextAlign.Center
-                                )
+                                androidx.compose.material3.Button(
+                                    onClick = { refreshTrigger++ },
+                                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                                        containerColor = MaterialTheme.colorScheme.primary,
+                                        contentColor = MaterialTheme.colorScheme.onPrimary
+                                    ),
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.refetch),
+                                        style = MaterialTheme.typography.labelLarge
+                                    )
+                                }
                             }
                         }
                     }
