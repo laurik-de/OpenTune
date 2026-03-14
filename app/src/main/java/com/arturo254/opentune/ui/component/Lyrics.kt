@@ -14,6 +14,7 @@ import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
@@ -142,6 +143,7 @@ import com.arturo254.opentune.db.entities.LyricsEntity.Companion.LYRICS_NOT_FOUN
 import com.arturo254.opentune.lyrics.LyricsEntry
 import com.arturo254.opentune.lyrics.LyricsUtils.findCurrentLineIndex
 import com.arturo254.opentune.lyrics.LyricsUtils.parseLyrics
+import androidx.compose.ui.platform.LocalView
 import com.arturo254.opentune.ui.component.shimmer.ShimmerHost
 import com.arturo254.opentune.ui.component.shimmer.TextPlaceholder
 import com.arturo254.opentune.ui.menu.LyricsMenu
@@ -221,6 +223,8 @@ fun Lyrics(
     var sliderPosition by remember { mutableStateOf<Long?>(null) }
     var showImageOverlay by remember { mutableStateOf(false) }
     var cornerRadius by remember { mutableFloatStateOf(16f) }
+
+    var isImmersiveMode by rememberSaveable { mutableStateOf(false) }
 
     var isAutoScrollEnabled by rememberSaveable { mutableStateOf(true) }
 
@@ -434,6 +438,9 @@ fun Lyrics(
                 isSelectionModeActive = false
                 selectedIndices.clear()
             }
+            isImmersiveMode -> {
+                isImmersiveMode = false
+            }
             isFullscreen -> onNavigateBack?.invoke()
         }
     }
@@ -471,6 +478,30 @@ fun Lyrics(
     LaunchedEffect(Unit) {
         if (isFullscreen) {
             cornerRadius = 16f
+        }
+    }
+
+    val view = LocalView.current
+    LaunchedEffect(isImmersiveMode) {
+        val window = (context as? android.app.Activity)?.window
+        window?.let { win ->
+            val insetsController = androidx.core.view.WindowCompat.getInsetsController(win, view)
+            if (isImmersiveMode) {
+                insetsController.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+                insetsController.systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            } else {
+                insetsController.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+            }
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            val window = (context as? android.app.Activity)?.window
+            window?.let { win ->
+                val insetsController = androidx.core.view.WindowCompat.getInsetsController(win, view)
+                insetsController.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+            }
         }
     }
 
@@ -819,8 +850,10 @@ fun Lyrics(
                                     isSynced = isSynced,
                                     lyricsTextPosition = lyricsTextPosition,
                                     textColor = expressiveAccent,
+                                    isImmersiveMode = isImmersiveMode && isAutoScrollEnabled,
+                                    relativeIndex = index - displayedCurrentLineIndex,
                                     textSize = 26f,
-                                    lineSpacing = 4f,
+                                    lineSpacing = 10f,
                                     onClick = {
                                         if (isSelectionModeActive) {
                                             if (isSelected) {
@@ -906,14 +939,19 @@ fun Lyrics(
                     }
                 }
             }
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-                    .padding(bottom = 16.dp)
+            AnimatedVisibility(
+                visible = !isImmersiveMode || !isAutoScrollEnabled,
+                enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+                exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
             ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                        .padding(bottom = 16.dp)
+                ) {
 
-                val coroutineScope = rememberCoroutineScope()
+                    val coroutineScope = rememberCoroutineScope()
                 val offsetXAnimatable = remember { Animatable(0f) }
                 var dragStartTime by remember { mutableLongStateOf(0L) }
                 var totalDragDistance by remember { mutableFloatStateOf(0f) }
@@ -1137,6 +1175,31 @@ fun Lyrics(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
+                        // Immersive mode button
+                        if (isFullscreen) {
+                            Box(
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .clickable {
+                                        if (isImmersiveMode) {
+                                            isAutoScrollEnabled = true
+                                        } else {
+                                            isImmersiveMode = true
+                                        }
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    painter = painterResource(
+                                        if (isImmersiveMode) R.drawable.sync else R.drawable.fullscreen
+                                    ),
+                                    contentDescription = "",
+                                    tint = textBackgroundColor.copy(alpha = 0.8f),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+
                         // Favorite button
                         Box(
                             modifier = Modifier
@@ -1280,6 +1343,40 @@ fun Lyrics(
                         color = textBackgroundColor,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+        }
+        }
+
+        // Exit Immersive Mode Icon
+        val exitButtonPadding by animateDpAsState(
+            targetValue = if (isImmersiveMode && !isAutoScrollEnabled) 180.dp else 32.dp,
+            animationSpec = spring(stiffness = Spring.StiffnessLow),
+            label = "exitButtonPadding"
+        )
+
+        AnimatedVisibility(
+            visible = isImmersiveMode,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(bottom = exitButtonPadding, end = 24.dp)
+        ) {
+            Surface(
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
+                modifier = Modifier
+                    .size(48.dp)
+                    .clickable { isImmersiveMode = false }
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.fullscreen_exit),
+                        contentDescription = "Exit Immersive Mode",
+                        tint = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.size(24.dp)
                     )
                 }
             }

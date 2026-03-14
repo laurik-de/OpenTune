@@ -3,6 +3,7 @@ package com.arturo254.opentune.ui.component
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.ui.draw.blur
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Column
@@ -41,6 +42,8 @@ fun LyricsLine(
     onLongClick: () -> Unit,
     isSelected: Boolean,
     isSelectionModeActive: Boolean,
+    isImmersiveMode: Boolean = false,
+    relativeIndex: Int = 0,
     modifier: Modifier = Modifier
 ) {
     // 1. Determine the exact state of this line
@@ -57,6 +60,13 @@ fun LyricsLine(
     val targetAlpha = when {
         isSelectionModeActive && !isSelected -> 0.3f
         isActive -> 1f
+        isImmersiveMode -> {
+            when (relativeIndex) {
+                -1 -> 0.25f
+                1, 2 -> 0.5f
+                else -> 0f
+            }
+        }
         isPast -> 0.25f
         else -> 0.5f
     }
@@ -97,6 +107,8 @@ fun LyricsLine(
             scaleY = animatedScale
             alpha = animatedAlpha
         }
+        .then(if (isImmersiveMode && relativeIndex == 1) Modifier.blur(2.dp) else Modifier)
+        .then(if (isImmersiveMode && relativeIndex == 2) Modifier.blur(6.dp) else Modifier)
 
     Column(
         modifier = itemModifier,
