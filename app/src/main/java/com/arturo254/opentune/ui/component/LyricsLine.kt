@@ -2,9 +2,11 @@ package com.arturo254.opentune.ui.component
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.ui.draw.blur
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -28,6 +30,7 @@ import androidx.compose.ui.unit.sp
 import com.arturo254.opentune.lyrics.LyricsEntry
 import com.arturo254.opentune.ui.screens.settings.LyricsPosition
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun LyricsLine(
     entry: LyricsEntry,
@@ -42,9 +45,9 @@ fun LyricsLine(
     onLongClick: () -> Unit,
     isSelected: Boolean,
     isSelectionModeActive: Boolean,
+    modifier: Modifier = Modifier,
     isImmersiveMode: Boolean = false,
-    relativeIndex: Int = 0,
-    modifier: Modifier = Modifier
+    relativeIndex: Int = 0
 ) {
     // 1. Determine the exact state of this line
     val isActive = index == currentLineIndex && isSynced
@@ -84,13 +87,25 @@ fun LyricsLine(
         }
     }
 
+    val isClickEnabled = !isImmersiveMode || relativeIndex in -1..2
+
     val itemModifier = modifier
         .fillMaxWidth()
         .clip(RoundedCornerShape(12.dp))
-        .clickable(
-            interactionSource = remember { MutableInteractionSource() },
-            indication = null,
-            onClick = onClick
+        .then(
+            if (isSelectionModeActive) {
+                Modifier.clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = { if (isClickEnabled) onClick() }
+                )
+            } else {
+                Modifier.combinedClickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = { if (isClickEnabled) onClick() },
+                )
+            }
         )
         .background(
             if (isSelected && isSelectionModeActive)

@@ -1175,31 +1175,6 @@ fun Lyrics(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        // Immersive mode button
-                        if (isFullscreen) {
-                            Box(
-                                modifier = Modifier
-                                    .size(32.dp)
-                                    .clickable {
-                                        if (isImmersiveMode) {
-                                            isAutoScrollEnabled = true
-                                        } else {
-                                            isImmersiveMode = true
-                                        }
-                                    },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    painter = painterResource(
-                                        if (isImmersiveMode) R.drawable.sync else R.drawable.fullscreen
-                                    ),
-                                    contentDescription = "",
-                                    tint = textBackgroundColor.copy(alpha = 0.8f),
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                        }
-
                         // Favorite button
                         Box(
                             modifier = Modifier
@@ -1349,15 +1324,15 @@ fun Lyrics(
         }
         }
 
-        // Exit Immersive Mode Icon
+        // Immersive/Auto-scroll Floating Button
         val exitButtonPadding by animateDpAsState(
-            targetValue = if (isImmersiveMode && !isAutoScrollEnabled) 180.dp else 32.dp,
+            targetValue = if ((isImmersiveMode && !isAutoScrollEnabled) || !isImmersiveMode) 180.dp else 32.dp,
             animationSpec = spring(stiffness = Spring.StiffnessLow),
             label = "exitButtonPadding"
         )
 
         AnimatedVisibility(
-            visible = isImmersiveMode,
+            visible = isFullscreen,
             enter = fadeIn(),
             exit = fadeOut(),
             modifier = Modifier
@@ -1366,15 +1341,27 @@ fun Lyrics(
         ) {
             Surface(
                 shape = CircleShape,
-                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
+                color = MaterialTheme.colorScheme.surface.copy(alpha = if (isImmersiveMode && isAutoScrollEnabled) 0.3f else 0.6f),
+                tonalElevation = 4.dp,
                 modifier = Modifier
                     .size(48.dp)
-                    .clickable { isImmersiveMode = false }
+                    .clickable {
+                        when {
+                            !isImmersiveMode -> isImmersiveMode = true
+                            !isAutoScrollEnabled -> isAutoScrollEnabled = true
+                            else -> isImmersiveMode = false
+                        }
+                    }
             ) {
                 Box(contentAlignment = Alignment.Center) {
+                    val iconRes = when {
+                        !isImmersiveMode -> R.drawable.fullscreen
+                        !isAutoScrollEnabled -> R.drawable.sync
+                        else -> R.drawable.fullscreen_exit
+                    }
                     Icon(
-                        painter = painterResource(id = R.drawable.fullscreen_exit),
-                        contentDescription = "Exit Immersive Mode",
+                        painter = painterResource(id = iconRes),
+                        contentDescription = "Toggle Immersive Mode",
                         tint = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.size(24.dp)
                     )
