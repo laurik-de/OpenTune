@@ -164,7 +164,7 @@ fun VersionCard(uriHandler: UriHandler) {
                         modifier = Modifier.size(20.dp)
                     )
                 },
-                onClick = { uriHandler.openUri("https://github.com/Arturo254/OpenTune/releases/latest") }
+                onClick = { uriHandler.openUri("https://github.com/Scroogey/OpenTune/releases/latest") }
             )
         )
     )
@@ -822,6 +822,11 @@ fun SettingsScreen(
                     onClick = { navController.navigate("settings/content") }
                 ),
                 SettingsCategoryItem(
+                    icon = painterResource(R.drawable.extension),
+                    title = { Text(stringResource(R.string.behaviour)) },
+                    onClick = { navController.navigate("settings/behaviour") }
+                ),
+                SettingsCategoryItem(
                     icon = painterResource(R.drawable.play),
                     title = { Text(stringResource(R.string.player_and_audio)) },
                     onClick = { navController.navigate("settings/player") }
@@ -840,11 +845,6 @@ fun SettingsScreen(
                     icon = painterResource(R.drawable.restore),
                     title = { Text(stringResource(R.string.backup_restore)) },
                     onClick = { navController.navigate("settings/backup_restore") }
-                ),
-                SettingsCategoryItem(
-                    icon = painterResource(R.drawable.schedule),
-                    title = { Text(stringResource(R.string.behaviour)) },
-                    onClick = { navController.navigate("settings/behaviour") }
                 ),
                 SettingsCategoryItem(
                     icon = painterResource(R.drawable.info),
@@ -887,7 +887,7 @@ fun SettingsScreen(
         Spacer(Modifier.height(16.dp))
 
         // Card de actualización disponible
-        UpdateCard()
+//        UpdateCard()
 
         // Card de versión
         VersionCard(uriHandler)

@@ -1659,7 +1659,7 @@ fun ProfileIconWithUpdateBadge(
     LaunchedEffect(currentVersion) {
         try {
             val latestVersion = withContext(Dispatchers.IO) { checkForUpdates() }
-            showUpdateBadge = latestVersion?.let { isNewerVersion(it, currentVersion) } ?: false
+            // showUpdateBadge = latestVersion?.let { isNewerVersion(it, currentVersion) } ?: false
         } catch (e: Exception) {
             Timber.tag("ProfileIcon").e("Error checking for updates: ${e.message}")
         }
