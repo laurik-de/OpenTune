@@ -1275,6 +1275,18 @@ class MusicService :
                 PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS
             )
 
+            val dbLength = runBlocking(Dispatchers.IO) { database.format(mediaId).first()?.contentLength ?: C.LENGTH_UNSET.toLong() }
+
+            // Auto-evict corrupted caches
+            if (dbLength > 0) {
+                listOf(downloadCache, playerCache).forEach { cache ->
+                    val cachedLength = androidx.media3.datasource.cache.ContentMetadata.getContentLength(cache.getContentMetadata(mediaId))
+                    if (cachedLength != C.LENGTH_UNSET.toLong() && cachedLength < dbLength) {
+                        cache.removeResource(mediaId)
+                    }
+                }
+            }
+
             val checkLength = if (dataSpec.length >= 0) dataSpec.length else 1
             val isCached = downloadCache.isCached(mediaId, dataSpec.position, checkLength) ||
                     playerCache.isCached(mediaId, dataSpec.position, checkLength)
