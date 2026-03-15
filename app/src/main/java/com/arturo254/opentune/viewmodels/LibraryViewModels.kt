@@ -45,6 +45,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOn
@@ -243,6 +244,7 @@ class LibraryPlaylistsViewModel
 constructor(
     @ApplicationContext context: Context,
     database: MusicDatabase,
+    downloadUtil: DownloadUtil,
     private val syncUtils: SyncUtils,
 ) : ViewModel() {
     val allPlaylists =
@@ -253,6 +255,26 @@ constructor(
             }.distinctUntilChanged()
             .flatMapLatest { (sortType, descending) ->
                 database.playlists(sortType, descending)
+            }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
+    val downloadedPlaylists =
+        context.dataStore.data
+            .map {
+                it[PlaylistSortTypeKey].toEnum(PlaylistSortType.CREATE_DATE) to (it[PlaylistSortDescendingKey]
+                    ?: true)
+            }.distinctUntilChanged()
+            .flatMapLatest { (sortType, descending) ->
+                combine(
+                    database.playlists(sortType, descending),
+                    database.allPlaylistSongs(),
+                    downloadUtil.downloads
+                ) { playlists, playlistSongMaps, downloads ->
+                    val playlistToSongs = playlistSongMaps.groupBy { it.playlistId }
+                    playlists.filter { playlist ->
+                        val songIds = playlistToSongs[playlist.id]?.map { it.songId } ?: emptyList()
+                        songIds.isNotEmpty() && songIds.all { downloads[it]?.state == Download.STATE_COMPLETED }
+                    }
+                }
             }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
     fun sync() {

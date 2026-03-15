@@ -1104,133 +1104,89 @@ fun PlaylistListItem(
     modifier: Modifier = Modifier,
     trailingContent: @Composable RowScope.() -> Unit = {},
     autoPlaylist: Boolean = false,
-) = ListItem(
-    title = playlist.playlist.name,
-    subtitle = if (autoPlaylist) {
-        ""
-    } else {
-        if (playlist.songCount == 0 && playlist.playlist.remoteSongCount != null) {
-            pluralStringResource(
-                R.plurals.n_song,
-                playlist.playlist.remoteSongCount,
-                playlist.playlist.remoteSongCount
-            )
-        } else {
-            pluralStringResource(R.plurals.n_song, playlist.songCount, playlist.songCount)
+) {
+    var downloadState by remember {
+        mutableStateOf(Download.STATE_STOPPED)
+    }
+
+    if (!autoPlaylist) {
+        val database = LocalDatabase.current
+        val downloadUtil = LocalDownloadUtil.current
+        var songs by remember {
+            mutableStateOf(emptyList<Song>())
         }
-    },
-    thumbnailContent = {
-        val painter =
-            when (playlist.playlist.name) {
-                stringResource(R.string.liked) -> R.drawable.favorite_border
-                stringResource(R.string.offline) -> R.drawable.offline
-                stringResource(R.string.cached_playlist) -> R.drawable.cached
-                else -> {
-                    if (autoPlaylist) {
-                        R.drawable.trending_up
-                    } else {
-                        R.drawable.queue_music
 
-                    }
-                }
+        LaunchedEffect(playlist.id) {
+            database.playlistSongs(playlist.id).collect {
+                songs = it.map { it -> it.song }
             }
-        when (playlist.thumbnails.size) {
-            0 ->
-                Box(
-                    modifier =
-                        Modifier
-                            .size(ListThumbnailSize)
-                            .clip(RoundedCornerShape(ThumbnailCornerRadius))
-                            .background(MaterialTheme.colorScheme.surfaceContainer)
-                ) {
-                    Icon(
-                        painter = painterResource(painter),
-                        contentDescription = null,
-                        modifier = Modifier
-                            .size(ListThumbnailSize / 2)
-                            .align(Alignment.Center)
-                    )
-                }
+        }
 
-            1 ->
-                AsyncImage(
-                    model = playlist.thumbnails[0],
-                    contentDescription = null,
-                    modifier =
-                        Modifier
-                            .size(ListThumbnailSize)
-                            .clip(RoundedCornerShape(ThumbnailCornerRadius)),
+        LaunchedEffect(songs) {
+            if (songs.isEmpty()) {
+                downloadState = Download.STATE_STOPPED
+                return@LaunchedEffect
+            }
+            downloadUtil.downloads.collect { downloads ->
+                downloadState =
+                    if (songs.all { downloads[it.id]?.state == STATE_COMPLETED }) {
+                        STATE_COMPLETED
+                    } else if (songs.all {
+                            downloads[it.id]?.state == STATE_QUEUED ||
+                                    downloads[it.id]?.state == STATE_DOWNLOADING ||
+                                    downloads[it.id]?.state == STATE_COMPLETED
+                        }
+                    ) {
+                        STATE_DOWNLOADING
+                    } else {
+                        Download.STATE_STOPPED
+                    }
+            }
+        }
+    }
+
+    ListItem(
+        title = playlist.playlist.name,
+        subtitle = if (autoPlaylist) {
+            ""
+        } else {
+            if (playlist.songCount == 0 && playlist.playlist.remoteSongCount != null) {
+                pluralStringResource(
+                    R.plurals.n_song,
+                    playlist.playlist.remoteSongCount,
+                    playlist.playlist.remoteSongCount
                 )
-
-            else ->
-                Box(
-                    modifier =
-                        Modifier
-                            .size(ListThumbnailSize)
-                            .clip(RoundedCornerShape(ThumbnailCornerRadius)),
-                ) {
-                    listOf(
-                        Alignment.TopStart,
-                        Alignment.TopEnd,
-                        Alignment.BottomStart,
-                        Alignment.BottomEnd,
-                    ).fastForEachIndexed { index, alignment ->
-                        AsyncImage(
-                            model = playlist.thumbnails.getOrNull(index),
+            } else {
+                pluralStringResource(R.plurals.n_song, playlist.songCount, playlist.songCount)
+            }
+        },
+        badges = {
+            if (!autoPlaylist) {
+                when (downloadState) {
+                    STATE_COMPLETED ->
+                        Icon(
+                            painter = painterResource(R.drawable.offline),
                             contentDescription = null,
                             modifier =
-                                Modifier
-                                    .align(alignment)
-                                    .size(ListThumbnailSize / 2),
+                            Modifier
+                                .size(18.dp)
+                                .padding(end = 2.dp),
                         )
-                    }
+
+                    STATE_DOWNLOADING ->
+                        CircularProgressIndicator(
+                            strokeWidth = 2.dp,
+                            modifier =
+                            Modifier
+                                .size(16.dp)
+                                .padding(end = 2.dp),
+                        )
+
+                    else -> {}
                 }
-        }
-    },
-    trailingContent = trailingContent,
-    modifier = modifier,
-)
-
-@Composable
-fun PlaylistGridItem(
-    playlist: Playlist,
-    modifier: Modifier = Modifier,
-    badges: @Composable RowScope.() -> Unit = { },
-    fillMaxWidth: Boolean = false,
-    autoPlaylist: Boolean = false,
-    context: Context // Agregamos el contexto para obtener la URI de la imagen
-) = GridItem(
-    title = playlist.playlist.name,
-    subtitle = if (autoPlaylist) {
-        ""
-    } else {
-        if (playlist.songCount == 0 && playlist.playlist.remoteSongCount != null) {
-            pluralStringResource(
-                R.plurals.n_song,
-                playlist.playlist.remoteSongCount,
-                playlist.playlist.remoteSongCount
-            )
-        } else {
-            pluralStringResource(R.plurals.n_song, playlist.songCount, playlist.songCount)
-        }
-    },
-    badges = badges,
-    thumbnailContent = {
-        val thumbnailUri =
-            getPlaylistImageUri(context, playlist.playlist.id) // Obtener URI de la miniatura
-
-        if (thumbnailUri != null) {
-            // Si la URI de la imagen existe, la mostramos
-            AsyncImage(
-                model = thumbnailUri,
-                contentDescription = null,
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(ThumbnailCornerRadius)),
-            )
-        } else {
-            // Si no hay miniatura, mostrar la imagen predeterminada
+            }
+        },
+        thumbnailContent = {
             val painter =
                 when (playlist.playlist.name) {
                     stringResource(R.string.liked) -> R.drawable.favorite_border
@@ -1241,28 +1197,25 @@ fun PlaylistGridItem(
                             R.drawable.trending_up
                         } else {
                             R.drawable.queue_music
+
                         }
                     }
                 }
-            val width = maxWidth
-            val Libcarditem = 25.dp
             when (playlist.thumbnails.size) {
                 0 ->
                     Box(
                         modifier =
-                            Modifier
-                                .fillMaxSize()
-                                .background(MaterialTheme.colorScheme.surfaceContainer)
-                                .clip(RoundedCornerShape(Libcarditem))
+                        Modifier
+                            .size(ListThumbnailSize)
+                            .clip(RoundedCornerShape(ThumbnailCornerRadius))
+                            .background(MaterialTheme.colorScheme.surfaceContainer)
                     ) {
                         Icon(
                             painter = painterResource(painter),
                             contentDescription = null,
-                            tint = LocalContentColor.current.copy(alpha = 0.8f),
-                            modifier =
-                                Modifier
-                                    .size(width / 2)
-                                    .align(Alignment.Center),
+                            modifier = Modifier
+                                .size(ListThumbnailSize / 2)
+                                .align(Alignment.Center)
                         )
                     }
 
@@ -1271,17 +1224,17 @@ fun PlaylistGridItem(
                         model = playlist.thumbnails[0],
                         contentDescription = null,
                         modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(ThumbnailCornerRadius)),
+                        Modifier
+                            .size(ListThumbnailSize)
+                            .clip(RoundedCornerShape(ThumbnailCornerRadius)),
                     )
 
                 else ->
                     Box(
                         modifier =
-                            Modifier
-                                .size(width)
-                                .clip(RoundedCornerShape(ThumbnailCornerRadius)),
+                        Modifier
+                            .size(ListThumbnailSize)
+                            .clip(RoundedCornerShape(ThumbnailCornerRadius)),
                     ) {
                         listOf(
                             Alignment.TopStart,
@@ -1292,21 +1245,202 @@ fun PlaylistGridItem(
                             AsyncImage(
                                 model = playlist.thumbnails.getOrNull(index),
                                 contentDescription = null,
-                                contentScale = ContentScale.Crop,
                                 modifier =
-                                    Modifier
-                                        .align(alignment)
-                                        .size(width / 2),
+                                Modifier
+                                    .align(alignment)
+                                    .size(ListThumbnailSize / 2),
                             )
                         }
                     }
             }
+        },
+        trailingContent = trailingContent,
+        modifier = modifier,
+    )
+}
+
+@Composable
+fun PlaylistGridItem(
+    playlist: Playlist,
+    modifier: Modifier = Modifier,
+    fillMaxWidth: Boolean = false,
+    autoPlaylist: Boolean = false,
+    context: Context // Agregamos el contexto para obtener la URI de la imagen
+) {
+    var downloadState by remember {
+        mutableStateOf(Download.STATE_STOPPED)
+    }
+
+    if (!autoPlaylist) {
+        val database = LocalDatabase.current
+        val downloadUtil = LocalDownloadUtil.current
+        var songs by remember {
+            mutableStateOf(emptyList<Song>())
         }
-    },
-    thumbnailShape = RoundedCornerShape(ThumbnailCornerRadius),
-    fillMaxWidth = fillMaxWidth,
-    modifier = modifier,
-)
+
+        LaunchedEffect(playlist.id) {
+            database.playlistSongs(playlist.id).collect {
+                songs = it.map { it.song }
+            }
+        }
+
+        LaunchedEffect(songs) {
+            if (songs.isEmpty()) {
+                downloadState = Download.STATE_STOPPED
+                return@LaunchedEffect
+            }
+            downloadUtil.downloads.collect { downloads ->
+                downloadState =
+                    if (songs.all { downloads[it.id]?.state == STATE_COMPLETED }) {
+                        STATE_COMPLETED
+                    } else if (songs.all {
+                            downloads[it.id]?.state == STATE_QUEUED ||
+                                    downloads[it.id]?.state == STATE_DOWNLOADING ||
+                                    downloads[it.id]?.state == STATE_COMPLETED
+                        }
+                    ) {
+                        STATE_DOWNLOADING
+                    } else {
+                        Download.STATE_STOPPED
+                    }
+            }
+        }
+    }
+
+    GridItem(
+        title = playlist.playlist.name,
+        subtitle = if (autoPlaylist) {
+            ""
+        } else {
+            if (playlist.songCount == 0 && playlist.playlist.remoteSongCount != null) {
+                pluralStringResource(
+                    R.plurals.n_song,
+                    playlist.playlist.remoteSongCount,
+                    playlist.playlist.remoteSongCount
+                )
+            } else {
+                pluralStringResource(R.plurals.n_song, playlist.songCount, playlist.songCount)
+            }
+        },
+        badges = {
+            if (!autoPlaylist) {
+                when (downloadState) {
+                    STATE_COMPLETED ->
+                        Icon(
+                            painter = painterResource(R.drawable.offline),
+                            contentDescription = null,
+                            modifier =
+                            Modifier
+                                .size(18.dp)
+                                .padding(end = 2.dp),
+                        )
+
+                    STATE_DOWNLOADING ->
+                        CircularProgressIndicator(
+                            strokeWidth = 2.dp,
+                            modifier =
+                            Modifier
+                                .size(16.dp)
+                                .padding(end = 2.dp),
+                        )
+
+                    else -> {}
+                }
+            }
+        },
+        thumbnailContent = {
+            val thumbnailUri =
+                getPlaylistImageUri(context, playlist.playlist.id) // Obtener URI de la miniatura
+
+            if (thumbnailUri != null) {
+                // Si la URI de la imagen existe, la mostramos
+                AsyncImage(
+                    model = thumbnailUri,
+                    contentDescription = null,
+                    modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(ThumbnailCornerRadius)),
+                )
+            } else {
+                // Si no hay miniatura, mostrar la imagen predeterminada
+                val painter =
+                    when (playlist.playlist.name) {
+                        stringResource(R.string.liked) -> R.drawable.favorite_border
+                        stringResource(R.string.offline) -> R.drawable.offline
+                        stringResource(R.string.cached_playlist) -> R.drawable.cached
+                        else -> {
+                            if (autoPlaylist) {
+                                R.drawable.trending_up
+                            } else {
+                                R.drawable.queue_music
+                            }
+                        }
+                    }
+                val width = maxWidth
+                val Libcarditem = 25.dp
+                when (playlist.thumbnails.size) {
+                    0 ->
+                        Box(
+                            modifier =
+                            Modifier
+                                .fillMaxSize()
+                                .background(MaterialTheme.colorScheme.surfaceContainer)
+                                .clip(RoundedCornerShape(Libcarditem))
+                        ) {
+                            Icon(
+                                painter = painterResource(painter),
+                                contentDescription = null,
+                                tint = LocalContentColor.current.copy(alpha = 0.8f),
+                                modifier =
+                                Modifier
+                                    .size(width / 2)
+                                    .align(Alignment.Center),
+                            )
+                        }
+
+                    1 ->
+                        AsyncImage(
+                            model = playlist.thumbnails[0],
+                            contentDescription = null,
+                            modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(ThumbnailCornerRadius)),
+                        )
+
+                    else ->
+                        Box(
+                            modifier =
+                            Modifier
+                                .size(width)
+                                .clip(RoundedCornerShape(ThumbnailCornerRadius)),
+                        ) {
+                            listOf(
+                                Alignment.TopStart,
+                                Alignment.TopEnd,
+                                Alignment.BottomStart,
+                                Alignment.BottomEnd,
+                            ).fastForEachIndexed { index, alignment ->
+                                AsyncImage(
+                                    model = playlist.thumbnails.getOrNull(index),
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Crop,
+                                    modifier =
+                                    Modifier
+                                        .align(alignment)
+                                        .size(width / 2),
+                                )
+                            }
+                        }
+                }
+            }
+        },
+        thumbnailShape = RoundedCornerShape(ThumbnailCornerRadius),
+        fillMaxWidth = fillMaxWidth,
+        modifier = modifier,
+    )
+}
 
 
 @Composable

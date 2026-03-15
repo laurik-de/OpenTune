@@ -175,6 +175,10 @@ interface DatabaseDao {
     fun playlistSongs(playlistId: String): Flow<List<PlaylistSong>>
 
     @Transaction
+    @Query("SELECT * FROM playlist_song_map")
+    fun allPlaylistSongs(): Flow<List<PlaylistSongMap>>
+
+    @Transaction
     @Query(
         "SELECT song.* FROM song_artist_map " +
                 "JOIN song ON song_artist_map.songId = song.id WHERE artistId = :artistId ORDER BY inLibrary",

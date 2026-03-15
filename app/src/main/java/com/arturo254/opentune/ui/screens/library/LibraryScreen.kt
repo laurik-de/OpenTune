@@ -30,6 +30,7 @@ fun LibraryScreen(navController: NavController) {
                 chips =
                     listOf(
                         LibraryFilter.PLAYLISTS to stringResource(R.string.filter_playlists),
+                        LibraryFilter.DOWNLOADED to stringResource(R.string.filter_downloaded),
                         LibraryFilter.SONGS to stringResource(R.string.filter_songs),
                         LibraryFilter.ALBUMS to stringResource(R.string.filter_albums),
                         LibraryFilter.ARTISTS to stringResource(R.string.filter_artists),
@@ -61,6 +62,7 @@ fun LibraryScreen(navController: NavController) {
         {
         when (filterType) {
             LibraryFilter.LIBRARY -> LibraryMixScreen(navController, filterContent)
+            LibraryFilter.DOWNLOADED -> LibraryPlaylistsScreen(navController, filterContent, downloadedOnly = true)
             LibraryFilter.PLAYLISTS -> LibraryPlaylistsScreen(navController, filterContent)
             LibraryFilter.SONGS -> LibrarySongsScreen(
                 navController,
