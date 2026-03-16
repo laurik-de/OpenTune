@@ -69,6 +69,7 @@ import com.arturo254.opentune.ui.component.NavigationTitle
 import com.arturo254.opentune.ui.component.SongListItem
 import com.arturo254.opentune.ui.component.YouTubeListItem
 import com.arturo254.opentune.ui.component.SwipeableSongItem
+import com.arturo254.opentune.ui.component.clickableSong
 import com.arturo254.opentune.ui.menu.SelectionMediaMetadataMenu
 import com.arturo254.opentune.ui.menu.SongMenu
 import com.arturo254.opentune.ui.menu.YouTubeSongMenu
@@ -253,7 +254,8 @@ fun HistoryScreen(
                                 },
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .combinedClickable(
+                                    .clickableSong(
+                                        songId = song.id,
                                         onClick = {
                                             if (song.id == mediaMetadata?.id) {
                                                 playerConnection.player.togglePlayPause()
@@ -329,7 +331,8 @@ fun HistoryScreen(
                                 },
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .combinedClickable(
+                                    .clickableSong(
+                                        songId = event.song.id,
                                         onClick = {
                                             if (!selection) {
                                                 if (event.song.id == mediaMetadata?.id) {

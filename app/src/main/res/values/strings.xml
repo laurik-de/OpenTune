@@ -231,6 +231,8 @@
     <string name="waiting_for_network">Waiting for network connection…</string>
     <string name="seek_backward">5 seconds backward</string>
     <string name="seek_forward">5 seconds forward</string>
+    <string name="error_source_skip">Source error, skipping song…</string>
+    <string name="error_offline_skip">Song not available offline, skipping…</string>
 
     <!-- Player action -->
     <string name="action_like">Like</string>

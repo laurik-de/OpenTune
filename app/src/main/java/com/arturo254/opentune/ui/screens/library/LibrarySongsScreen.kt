@@ -58,6 +58,7 @@ import com.arturo254.opentune.ui.component.HideOnScrollFAB
 import com.arturo254.opentune.ui.component.LocalMenuState
 import com.arturo254.opentune.ui.component.SongListItem
 import com.arturo254.opentune.ui.component.SwipeableSongItem
+import com.arturo254.opentune.ui.component.clickableSong
 import com.arturo254.opentune.ui.component.SortHeader
 import com.arturo254.opentune.ui.component.VerticalFastScroller
 import com.arturo254.opentune.ui.menu.SelectionSongMenu
@@ -297,7 +298,8 @@ fun LibrarySongsScreen(
                         modifier =
                             Modifier
                                 .fillMaxWidth()
-                                .combinedClickable(
+                                .clickableSong(
+                                    songId = songWrapper.item.id,
                                     onClick = {
                                         if (!selection) {
                                             if (songWrapper.item.id == mediaMetadata?.id) {

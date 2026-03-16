@@ -134,6 +134,7 @@ import com.arturo254.opentune.ui.component.EmptyPlaceholder
 import com.arturo254.opentune.ui.component.LocalMenuState
 import com.arturo254.opentune.ui.component.SongListItem
 import com.arturo254.opentune.ui.component.SwipeableSongItem
+import com.arturo254.opentune.ui.component.clickableSong
 import com.arturo254.opentune.ui.component.SortHeader
 import com.arturo254.opentune.ui.component.TextFieldDialog
 import com.arturo254.opentune.ui.menu.PlaylistMenu
@@ -672,7 +673,8 @@ fun LocalPlaylistScreen(
                                                         modifier =
                                                             Modifier
                                                                 .fillMaxWidth()
-                                                                .combinedClickable(
+                                                                .clickableSong(
+                                                                    songId = song.song.id,
                                                                     onClick = {
                                                                         if (song.song.id == mediaMetadata?.id) {
                                                                             playerConnection.player.togglePlayPause()
@@ -830,7 +832,8 @@ fun LocalPlaylistScreen(
                                                         modifier =
                                                             Modifier
                                                                 .fillMaxWidth()
-                                                                .combinedClickable(
+                                                                .clickableSong(
+                                                                    songId = songWrapper.item.song.id,
                                                                     onClick = {
                                                                         if (!selection) {
                                                                             if (songWrapper.item.song.id == mediaMetadata?.id) {

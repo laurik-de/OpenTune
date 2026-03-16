@@ -53,6 +53,15 @@ class NetworkConnectivityObserver(context: Context) {
         }
     }.distinctUntilChanged()
 
+    fun isConnected(): Boolean {
+        return connectivityManager.activeNetwork?.let { network ->
+            connectivityManager.getNetworkCapabilities(network)?.let { capabilities ->
+                capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+                        capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+            }
+        } ?: false
+    }
+
     fun unregister() {
         // Cleanup is handled by callbackFlow's awaitClose
     }

@@ -20,18 +20,22 @@ import com.arturo254.opentune.db.MusicDatabase
 import com.arturo254.opentune.db.entities.FormatEntity
 import com.arturo254.opentune.di.DownloadCache
 import com.arturo254.opentune.di.PlayerCache
-import com.arturo254.opentune.utils.YTPlayerUtils
-import com.arturo254.opentune.utils.enumPreference
-import dagger.hilt.android.qualifiers.ApplicationContext
 import com.arturo254.opentune.lyrics.LyricsHelper
 import com.arturo254.opentune.models.toMediaMetadata
+import com.arturo254.opentune.utils.YTPlayerUtils
+import com.arturo254.opentune.utils.NetworkConnectivityObserver
+import com.arturo254.opentune.utils.enumPreference
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -53,6 +57,7 @@ constructor(
 ) {
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val connectivityManager = context.getSystemService<ConnectivityManager>()!!
+    private val connectivityObserver = NetworkConnectivityObserver(context)
     private val audioQuality by enumPreference(context, AudioQualityKey, AudioQuality.AUTO)
     private val songUrlCache = HashMap<String, Pair<String, Long>>()
     private val dataSourceFactory =
@@ -135,6 +140,22 @@ constructor(
             )
         }
     val downloads = MutableStateFlow<Map<String, Download>>(emptyMap())
+
+    val isOffline = connectivityObserver.networkStatus
+        .map { !it }
+        .stateIn(scope, SharingStarted.Eagerly, false)
+
+    fun isOfflinePlayable(songId: String): Flow<Boolean> = combine(
+        getDownload(songId),
+        database.format(songId)
+    ) { download, format ->
+        if (download?.state == Download.STATE_COMPLETED) return@combine true
+        if (format == null) return@combine false
+
+        // Check if fully cached
+        playerCache.isCached(songId, 0, format.contentLength) ||
+                downloadCache.isCached(songId, 0, format.contentLength)
+    }
 
     fun getDownload(songId: String): Flow<Download?> = downloads.map { it[songId] }
 

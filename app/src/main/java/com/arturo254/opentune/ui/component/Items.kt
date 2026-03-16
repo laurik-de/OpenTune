@@ -14,7 +14,12 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
+import android.widget.Toast
+import android.os.Handler
+import android.os.Looper
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.BoxWithConstraintsScope
@@ -47,6 +52,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
@@ -160,6 +166,35 @@ inline fun ListItem(
 
         trailingContent()
     }
+}
+
+@Composable
+fun Modifier.clickableSong(
+    songId: String,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
+): Modifier {
+    val downloadUtil = LocalDownloadUtil.current
+    val isOffline by downloadUtil.isOffline.collectAsState()
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+
+    return this.combinedClickable(
+        enabled = enabled,
+        onClick = {
+            coroutineScope.launch {
+                if (isOffline && !downloadUtil.isOfflinePlayable(songId).first()) {
+                    Handler(Looper.getMainLooper()).post {
+                        Toast.makeText(context, R.string.error_offline_skip, Toast.LENGTH_SHORT).show()
+                    }
+                } else {
+                    onClick()
+                }
+            }
+        },
+        onLongClick = onLongClick
+    )
 }
 
 @Composable
@@ -375,6 +410,9 @@ fun SongListItem(
     inSelectionMode: Boolean = false,
     onSelectionChange: ((Boolean) -> Unit)? = null,
 ) {
+    val isOffline by LocalDownloadUtil.current.isOffline.collectAsState()
+    val isPlayable by LocalDownloadUtil.current.isOfflinePlayable(song.id).collectAsState(initial = true)
+
     ListItem(
         title = song.song.title,
         subtitle = joinByBullet(
@@ -456,7 +494,7 @@ fun SongListItem(
             }
         },
         trailingContent = trailingContent,
-        modifier = modifier,
+        modifier = modifier.alpha(if (isOffline && !isPlayable) 0.5f else 1f),
         isActive = isActive,
     )
 }
@@ -515,8 +553,12 @@ fun SongGridItem(
     isActive: Boolean = false,
     isPlaying: Boolean = false,
     fillMaxWidth: Boolean = false,
-) = GridItem(
-    title = song.song.title,
+) {
+    val isOffline by LocalDownloadUtil.current.isOffline.collectAsState()
+    val isPlayable by LocalDownloadUtil.current.isOfflinePlayable(song.id).collectAsState(initial = true)
+
+    return GridItem(
+        title = song.song.title,
     subtitle = joinByBullet(
         song.artists.joinToString { it.name },
         makeTimeString(song.song.duration * 1000L)
@@ -586,8 +628,9 @@ fun SongGridItem(
     },
     thumbnailShape = RoundedCornerShape(ThumbnailCornerRadius),
     fillMaxWidth = fillMaxWidth,
-    modifier = modifier
+    modifier = modifier.alpha(if (isOffline && !isPlayable) 0.5f else 1f)
 )
+}
 
 @Composable
 fun SongSmallGridItem(
@@ -595,8 +638,12 @@ fun SongSmallGridItem(
     modifier: Modifier = Modifier,
     isActive: Boolean = false,
     isPlaying: Boolean = false,
-) = SmallGridItem(
-    title = song.song.title,
+) {
+    val isOffline by LocalDownloadUtil.current.isOffline.collectAsState()
+    val isPlayable by LocalDownloadUtil.current.isOfflinePlayable(song.id).collectAsState(initial = true)
+
+    return SmallGridItem(
+        title = song.song.title,
     thumbnailContent = {
         AsyncImage(
             model = song.song.thumbnailUrl,
@@ -657,8 +704,9 @@ fun SongSmallGridItem(
         }
     },
     thumbnailShape = RoundedCornerShape(ThumbnailCornerRadius),
-    modifier = modifier,
+    modifier = modifier.alpha(if (isOffline && !isPlayable) 0.5f else 1f),
 )
+}
 
 @Composable
 fun ArtistListItem(

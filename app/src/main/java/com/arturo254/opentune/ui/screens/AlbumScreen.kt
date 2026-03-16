@@ -108,6 +108,7 @@ import com.arturo254.opentune.ui.component.LocalMenuState
 import com.arturo254.opentune.ui.component.NavigationTitle
 import com.arturo254.opentune.ui.component.SongListItem
 import com.arturo254.opentune.ui.component.SwipeableSongItem
+import com.arturo254.opentune.ui.component.clickableSong
 import com.arturo254.opentune.extensions.toMediaItem
 import com.arturo254.opentune.ui.component.YouTubeGridItem
 import com.arturo254.opentune.ui.component.shimmer.ListItemPlaceHolder
@@ -695,7 +696,8 @@ fun AlbumScreen(
                                 modifier =
                                     Modifier
                                         .fillMaxWidth()
-                                        .combinedClickable(
+                                        .clickableSong(
+                                            songId = songWrapper.item.id,
                                             onClick = {
                                                 if (!selection) {
                                                     if (songWrapper.item.id == mediaMetadata?.id) {

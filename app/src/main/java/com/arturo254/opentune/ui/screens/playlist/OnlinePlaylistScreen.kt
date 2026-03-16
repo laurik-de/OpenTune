@@ -99,6 +99,7 @@ import com.arturo254.opentune.ui.component.LocalMenuState
 import com.arturo254.opentune.ui.component.VerticalFastScroller
 import com.arturo254.opentune.ui.component.SwipeableSongItem
 import com.arturo254.opentune.ui.component.YouTubeListItem
+import com.arturo254.opentune.ui.component.clickableSong
 import com.arturo254.opentune.ui.component.shimmer.ButtonPlaceholder
 import com.arturo254.opentune.ui.component.shimmer.ListItemPlaceHolder
 import com.arturo254.opentune.ui.component.shimmer.ShimmerHost
@@ -440,7 +441,8 @@ fun OnlinePlaylistScreen(
                                     },
                                     modifier =
                                         Modifier
-                                            .combinedClickable(
+                                            .clickableSong(
+                                                songId = song.item.second.id,
                                                 enabled = !hideExplicit || !song.item.second.explicit,
                                                 onClick = {
                                                     if (!selection) {

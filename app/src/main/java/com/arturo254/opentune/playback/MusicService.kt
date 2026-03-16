@@ -145,6 +145,9 @@ import kotlinx.coroutines.withTimeout
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import timber.log.Timber
+import android.widget.Toast
+import android.os.Looper
+import android.os.Handler
 import java.io.ObjectInputStream
 import java.io.ObjectOutputStream
 import java.net.ConnectException
@@ -169,6 +172,9 @@ class MusicService :
 
     @Inject
     lateinit var mediaLibrarySessionCallback: MediaLibrarySessionCallback
+    
+    @Inject
+    lateinit var downloadUtil: DownloadUtil
 
     private lateinit var audioManager: AudioManager
     private var audioFocusRequest: AudioFocusRequest? = null
@@ -308,6 +314,10 @@ class MusicService :
                         player.prepare()
                         player.play()
                     }
+                }
+                if (!isConnected) {
+                    // Si estamos offline, verificar si la canción actual es reproducible
+                    seekToNextPlayable(player.currentMediaItemIndex, false)
                 }
             }
         }
@@ -585,6 +595,62 @@ class MusicService :
         return hasAudioFocus
     }
 
+    private fun seekToNextPlayable(startIndex: Int, isError: Boolean = false) {
+        val isOffline = !connectivityObserver.isConnected()
+        if (!isOffline && !isError) return
+
+        scope.launch {
+            var currentIndex = startIndex
+            var itemsSkipped = 0
+            val timeline = player.currentTimeline
+            if (timeline.isEmpty) return@launch
+
+            while (currentIndex < timeline.windowCount) {
+                val mediaItem = player.getMediaItemAt(currentIndex)
+                val mediaId = mediaItem.mediaId
+
+                val isPlayable = if (isOffline) {
+                    downloadUtil.isOfflinePlayable(mediaId).first()
+                } else {
+                    true
+                }
+
+                if (isPlayable && !(isError && currentIndex == startIndex)) {
+                    if (currentIndex != startIndex) {
+                        val finalIndex = currentIndex
+                        Handler(Looper.getMainLooper()).post {
+                            if (itemsSkipped > 0) {
+                                val toastRes = if (isError && startIndex == finalIndex - itemsSkipped) {
+                                    R.string.error_source_skip
+                                } else if (isOffline) {
+                                    R.string.error_offline_skip
+                                } else {
+                                    null
+                                }
+                                toastRes?.let { Toast.makeText(this@MusicService, it, Toast.LENGTH_SHORT).show() }
+                            }
+                            player.seekTo(finalIndex, C.TIME_UNSET)
+                            player.prepare()
+                            player.play()
+                        }
+                    }
+                    return@launch
+                }
+
+                currentIndex++
+                itemsSkipped++
+                
+                if (itemsSkipped > 50 || currentIndex >= timeline.windowCount) break
+            }
+
+            Handler(Looper.getMainLooper()).post {
+                player.pause()
+                val toastRes = if (isError) R.string.error_source_skip else if (isOffline) R.string.error_offline_skip else null
+                toastRes?.let { Toast.makeText(this@MusicService, it, Toast.LENGTH_SHORT).show() }
+            }
+        }
+    }
+
     private fun waitOnNetworkError() {
         waitingForNetworkConnection.value = true
     }
@@ -597,17 +663,12 @@ class MusicService :
          * too many errors come up too quickly. Pause to show player "stopped" state
          */
         consecutivePlaybackErr += 2
-        val nextWindowIndex = player.nextMediaItemIndex
-
-        if (consecutivePlaybackErr <= MAX_CONSECUTIVE_ERR && nextWindowIndex != C.INDEX_UNSET) {
-            player.seekTo(nextWindowIndex, C.TIME_UNSET)
-            player.prepare()
-            player.play()
-            return
+        seekToNextPlayable(player.currentMediaItemIndex, true)
+        
+        if (consecutivePlaybackErr > MAX_CONSECUTIVE_ERR) {
+            player.pause()
+            consecutivePlaybackErr = 0
         }
-
-        player.pause()
-        consecutivePlaybackErr = 0
     }
 
     private fun stopOnError() {
@@ -1063,6 +1124,11 @@ class MusicService :
     ) {
         lastPlaybackSpeed = -1.0f // forzar actualización de canción
 
+        // Check if playable offline
+        if (!connectivityObserver.isConnected()) {
+            seekToNextPlayable(player.currentMediaItemIndex, false)
+        }
+
         setupLoudnessEnhancer()
 
         discordUpdateJob?.cancel()
@@ -1233,23 +1299,22 @@ class MusicService :
         val isConnectionError = (error.cause?.cause is PlaybackException) &&
                 (error.cause?.cause as PlaybackException).errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED
 
-        if (!isNetworkConnected.value || isConnectionError) {
+        if (!connectivityObserver.isConnected() || isConnectionError) {
             waitOnNetworkError()
             return
         }
 
         // Proactively clear cache if we hit a source error that might be due to corruption
         if (error.errorCode == PlaybackException.ERROR_CODE_IO_UNSPECIFIED || error.errorCode == PlaybackException.ERROR_CODE_IO_READ_POSITION_OUT_OF_RANGE) {
-            player.currentMediaItem?.localConfiguration?.uri?.let { uri ->
-                val mediaId = player.currentMediaItem?.mediaId
-                if (mediaId != null) {
-                    scope.launch(Dispatchers.IO) {
-                        playerCache.removeResource(mediaId)
-                        downloadCache.removeResource(mediaId)
-                        Timber.tag(TAG).i("Evicted $mediaId from cache due to source error")
-                    }
+            player.currentMediaItem?.mediaId?.let { mediaId ->
+                scope.launch(Dispatchers.IO) {
+                    playerCache.removeResource(mediaId)
+                    downloadCache.removeResource(mediaId)
+                    Timber.tag(TAG).i("Evicted $mediaId from cache due to source error")
                 }
             }
+            skipOnError()
+            return
         }
 
         if (dataStore.get(AutoSkipNextOnErrorKey, false)) {
@@ -1311,7 +1376,7 @@ class MusicService :
                 return@Factory dataSpec
             }
 
-            if (!isNetworkConnected.value) {
+            if (!connectivityObserver.isConnected()) {
                 throw PlaybackException(
                     getString(R.string.error_no_internet),
                     null,
