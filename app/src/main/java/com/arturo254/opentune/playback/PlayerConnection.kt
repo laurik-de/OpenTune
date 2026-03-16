@@ -210,8 +210,8 @@ class PlayerConnection(
             _volume.value = player.volume
 
             // Inicializar estado de like
-            CoroutineScope(Dispatchers.IO).launch {
-                updateLikeStatusForCurrentSong()
+            updateScope.launch(Dispatchers.IO) {
+                updateLikeStatusForCurrentSong(player.currentMediaItem?.mediaId)
             }
 
             updateCanSkipPreviousAndNext()
@@ -224,10 +224,10 @@ class PlayerConnection(
 
 
     fun refreshLikeStatus() {
+        val mediaId = player.currentMediaItem?.mediaId
         updateScope.launch(Dispatchers.IO) {
-            updateLikeStatusForCurrentSong()
+            updateLikeStatusForCurrentSong(mediaId)
         }
-
     }
 
     private fun handlePlayerEvents(player: Player, events: Player.Events) {
@@ -546,8 +546,9 @@ class PlayerConnection(
         _currentWindowIndex.value = player.getCurrentQueueIndex()
 
         // Actualizar estado de like cuando cambia la canción
-        CoroutineScope(Dispatchers.IO).launch {
-            updateLikeStatusForCurrentSong()
+        val mediaIdTransition = mediaItem?.mediaId
+        updateScope.launch(Dispatchers.IO) {
+            updateLikeStatusForCurrentSong(mediaIdTransition)
         }
 
         if (lastMediaItemIndex != player.currentMediaItemIndex) {
@@ -557,15 +558,14 @@ class PlayerConnection(
         }
     }
 
-    private suspend fun updateLikeStatusForCurrentSong() {
+    private suspend fun updateLikeStatusForCurrentSong(mediaId: String?) {
         try {
-            val currentSongId = player.currentMediaItem?.mediaId
-            if (currentSongId != null) {
+            if (mediaId != null) {
                 // Consultar la base de datos para obtener el estado actual del like
                 // Similar a como lo hace Player.kt con currentSong?.song?.liked
-                val songWithInfo = database.song(currentSongId).first()
+                val songWithInfo = database.song(mediaId).first()
                 _isLiked.value = songWithInfo?.song?.liked ?: false
-                Timber.tag(TAG).d("Like status updated for song $currentSongId: ${_isLiked.value}")
+                Timber.tag(TAG).d("Like status updated for song $mediaId: ${_isLiked.value}")
             } else {
                 _isLiked.value = false
                 Timber.tag(TAG).d("No current song, setting like status to false")
