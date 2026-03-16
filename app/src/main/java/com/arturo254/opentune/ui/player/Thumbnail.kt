@@ -7,9 +7,9 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.grid.*
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -26,7 +26,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.media3.common.C
 import androidx.media3.common.Player
 import coil.compose.AsyncImage
 import coil.request.CachePolicy
@@ -35,11 +34,10 @@ import com.arturo254.opentune.LocalPlayerConnection
 import com.arturo254.opentune.R
 import com.arturo254.opentune.constants.*
 import com.arturo254.opentune.ui.component.AppConfig
-import com.arturo254.opentune.ui.utils.SnapLayoutInfoProvider
 import com.arturo254.opentune.utils.rememberEnumPreference
 import com.arturo254.opentune.utils.rememberPreference
 import kotlinx.coroutines.delay
-import kotlin.math.abs
+import kotlin.math.max
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -77,89 +75,34 @@ fun Thumbnail(
         else -> Color.White
     }
 
-    val thumbnailLazyGridState = rememberLazyGridState()
-    val timeline = playerConnection.player.currentTimeline
-    val shuffleModeEnabled = playerConnection.player.shuffleModeEnabled
+    val queueWindows by playerConnection.queueWindows.collectAsState()
+    val currentWindowIndex by playerConnection.currentWindowIndex.collectAsState()
 
-    val currentMediaItemIndex by playerConnection
-        .currentMediaItemIndex
-        .collectAsState()
+    val pagerState = rememberPagerState(
+        initialPage = if (queueWindows.isNotEmpty()) max(0, currentWindowIndex).coerceAtMost(queueWindows.size - 1) else 0,
+        pageCount = { queueWindows.size }
+    )
 
-    val mediaItems by remember(
-        currentMediaItemIndex,
-        timeline,
-        shuffleModeEnabled,
-        swipeThumbnail
-    ) {
-        derivedStateOf {
-
-            val currentItem = playerConnection.player.currentMediaItem
-
-            val previous = if (swipeThumbnail && !timeline.isEmpty) {
-                val index = timeline.getPreviousWindowIndex(
-                    currentMediaItemIndex,
-                    Player.REPEAT_MODE_OFF,
-                    shuffleModeEnabled
-                )
-                if (index != C.INDEX_UNSET)
-                    playerConnection.player.getMediaItemAt(index)
-                else null
-            } else null
-
-            val next = if (swipeThumbnail && !timeline.isEmpty) {
-                val index = timeline.getNextWindowIndex(
-                    currentMediaItemIndex,
-                    Player.REPEAT_MODE_OFF,
-                    shuffleModeEnabled
-                )
-                if (index != C.INDEX_UNSET)
-                    playerConnection.player.getMediaItemAt(index)
-                else null
-            } else null
-
-            listOfNotNull(previous, currentItem, next)
+    LaunchedEffect(currentWindowIndex) {
+        if (currentWindowIndex != -1 && currentWindowIndex < queueWindows.size && pagerState.currentPage != currentWindowIndex) {
+            pagerState.animateScrollToPage(currentWindowIndex)
         }
     }
 
-    val currentMediaIndex by remember(mediaItems) {
-        derivedStateOf {
-            mediaItems.indexOf(playerConnection.player.currentMediaItem)
-        }
-    }
-
-    // FIX 1: Reaccionar tanto a currentMediaItemIndex como a mediaItems
-    // para evitar la race condition donde mediaItems aún no se actualizó
-    LaunchedEffect(currentMediaItemIndex, mediaItems) {
-        val index = mediaItems.indexOf(playerConnection.player.currentMediaItem)
-        if (index != -1) {
-            thumbnailLazyGridState.animateScrollToItem(index)
-        }
-    }
-
-    // FIX 2: Detectar cuando el usuario termina de swipear y notificar al player
-    LaunchedEffect(thumbnailLazyGridState.isScrollInProgress) {
-        if (!thumbnailLazyGridState.isScrollInProgress && mediaItems.isNotEmpty()) {
-            val firstVisible = thumbnailLazyGridState.firstVisibleItemIndex
-            val safeCurrentIndex = currentMediaIndex.takeIf { it != -1 } ?: return@LaunchedEffect
-            when {
-                firstVisible > safeCurrentIndex && canSkipNext -> playerConnection.seekToNext()
-                firstVisible < safeCurrentIndex && canSkipPrevious -> playerConnection.seekToPrevious()
+    LaunchedEffect(pagerState.settledPage) {
+        if (pagerState.settledPage != currentWindowIndex && currentWindowIndex != -1) {
+            if (pagerState.settledPage > currentWindowIndex) {
+                playerConnection.seekToNext()
+            } else {
+                playerConnection.skipToPrevious()
             }
-        }
-    }
-
-    val snapProvider = remember(thumbnailLazyGridState) {
-        SnapLayoutInfoProvider(
-            lazyGridState = thumbnailLazyGridState
-        ) { layoutSize, itemSize ->
-            layoutSize / 2f - itemSize / 2f
         }
     }
 
     Box(modifier = modifier) {
 
         AnimatedVisibility(
-            visible = true,
+            visible = error == null,
             enter = fadeIn(),
             exit = fadeOut(),
             modifier = Modifier
@@ -170,6 +113,7 @@ fun Thumbnail(
                 modifier = Modifier.fillMaxSize(),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
+
                 if (!isAppleMusicStyle) {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -203,61 +147,55 @@ fun Thumbnail(
                 ) {
                     val size = maxWidth - PlayerHorizontalPadding * 2
 
-                    LazyHorizontalGrid(
-                        rows = GridCells.Fixed(1),
-                        state = thumbnailLazyGridState,
-                        flingBehavior = rememberSnapFlingBehavior(snapProvider),
+                    HorizontalPager(
+                        state = pagerState,
                         userScrollEnabled = swipeThumbnail && isPlayerExpanded,
-                        modifier = Modifier.fillMaxSize()
-                    ) {
+                        modifier = Modifier.fillMaxSize(),
+                        beyondViewportPageCount = 1
+                    ) { page ->
+                        val window = queueWindows.getOrNull(page)
+                        val item = window?.mediaItem
 
-                        items(
-                            items = mediaItems,
-                            key = { it.mediaId }
-                        ) { item ->
-
-                            Box(
-                                modifier = Modifier
-                                    .width(maxWidth)
-                                    .fillMaxSize()
-                                    .pointerInput(Unit) {
-                                        detectTapGestures(
-                                            onTap = { onOpenFullscreenLyrics() },
-                                            onDoubleTap = { offset ->
-                                                if (offset.x < size.toPx() / 2)
-                                                    playerConnection.player.seekBack()
-                                                else
-                                                    playerConnection.player.seekForward()
+                        Box(
+                            modifier = Modifier
+                                .width(maxWidth)
+                                .fillMaxSize()
+                                .pointerInput(Unit) {
+                                    detectTapGestures(
+                                        onTap = { onOpenFullscreenLyrics() },
+                                        onDoubleTap = { offset ->
+                                            if (offset.x < size.toPx() / 2) {
+                                                playerConnection.player.seekBack()
+                                            } else {
+                                                playerConnection.player.seekForward()
                                             }
-                                        )
-                                    },
-                                contentAlignment = Alignment.Center
-                            ) {
+                                        }
+                                    )
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
 
-                                if (isAppleMusicStyle) {
-                                    Box(Modifier.size(size))
-                                } else {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(size)
-                                            .clip(RoundedCornerShape(thumbnailCornerRadius.dp * 2))
-                                            .background(MaterialTheme.colorScheme.surfaceVariant)
-                                    ) {
-                                        // FIX 3: crossfade para transición visual suave
-                                        // y evitar que Coil muestre la imagen cacheada anterior
-                                        AsyncImage(
-                                            model = ImageRequest.Builder(context)
-                                                .data(item.mediaMetadata.artworkUri)
-                                                .memoryCachePolicy(CachePolicy.ENABLED)
-                                                .diskCachePolicy(CachePolicy.ENABLED)
-                                                .networkCachePolicy(CachePolicy.ENABLED)
-                                                .crossfade(300)
-                                                .build(),
-                                            contentDescription = null,
-                                            contentScale = ContentScale.Fit,
-                                            modifier = Modifier.fillMaxSize()
-                                        )
-                                    }
+                            if (isAppleMusicStyle) {
+                                Box(modifier = Modifier.size(size))
+                            } else {
+                                Box(
+                                    modifier = Modifier
+                                        .size(size)
+                                        .clip(RoundedCornerShape(thumbnailCornerRadius.dp * 2))
+                                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                                ) {
+                                    AsyncImage(
+                                        model = ImageRequest.Builder(context)
+                                            .data(item?.mediaMetadata?.artworkUri)
+                                            .memoryCachePolicy(CachePolicy.ENABLED)
+                                            .diskCachePolicy(CachePolicy.ENABLED)
+                                            .networkCachePolicy(CachePolicy.ENABLED)
+                                            .crossfade(300)
+                                            .build(),
+                                        contentDescription = null,
+                                        contentScale = ContentScale.Fit,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
                                 }
                             }
                         }

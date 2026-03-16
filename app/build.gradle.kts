@@ -25,8 +25,8 @@ android {
         applicationId = "de.laurik.opentune"
         minSdk = 24
         targetSdk = 36
-        versionCode = 126
-        versionName = "2.0.12-lflavor"
+        versionCode = 129
+        versionName = "2.0.12-lflavor-v4"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

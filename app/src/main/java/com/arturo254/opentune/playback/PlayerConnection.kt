@@ -210,8 +210,9 @@ class PlayerConnection(
             _volume.value = player.volume
 
             // Inicializar estado de like
+            val initialMediaId = player.currentMediaItem?.mediaId
             updateScope.launch(Dispatchers.IO) {
-                updateLikeStatusForCurrentSong(player.currentMediaItem?.mediaId)
+                updateLikeStatusForCurrentSong(initialMediaId)
             }
 
             updateCanSkipPreviousAndNext()
