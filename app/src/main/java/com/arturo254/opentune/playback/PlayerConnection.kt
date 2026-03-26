@@ -34,6 +34,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -564,7 +565,7 @@ class PlayerConnection(
             if (mediaId != null) {
                 // Consultar la base de datos para obtener el estado actual del like
                 // Similar a como lo hace Player.kt con currentSong?.song?.liked
-                val songWithInfo = database.song(mediaId).first()
+                val songWithInfo = database.song(mediaId).firstOrNull()
                 _isLiked.value = songWithInfo?.song?.liked ?: false
                 Timber.tag(TAG).d("Like status updated for song $mediaId: ${_isLiked.value}")
             } else {
