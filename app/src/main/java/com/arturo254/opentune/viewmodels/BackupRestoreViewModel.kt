@@ -143,7 +143,7 @@ class BackupRestoreViewModel @Inject constructor(
         runCatching {
             context.applicationContext.contentResolver.openInputStream(uri)?.use { stream ->
                 val lines = stream.bufferedReader().readLines()
-                if (lines.first().startsWith("#EXTM3U")) {
+                if (lines.firstOrNull()?.startsWith("#EXTM3U") == true) {
                     lines.forEachIndexed { _, rawLine ->
                         if (rawLine.startsWith("#EXTINF:")) {
                             // maybe later write this to be more efficient
